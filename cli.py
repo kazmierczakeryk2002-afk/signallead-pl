@@ -146,6 +146,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="Wygeneruj spersonalizowaną ofertę Teaser-First dla domeny agencji (np. delante.pl).",
     )
     parser.add_argument(
+        "--send-outreach",
+        type=str,
+        default=None,
+        help="Wyślij ofertę Teaser-First (+ załącznik Demo CSV) do agencji (Resend / SMTP / Sandbox).",
+    )
+    parser.add_argument(
+        "--send-batch",
+        action="store_true",
+        help="Wyślij serię ofert Teaser-First do nowych agencji (z limitem dziennym i cooldownem).",
+    )
+    parser.add_argument(
+        "--base-url",
+        type=str,
+        default="http://localhost:8000",
+        help="Publiczny adres serwera do linków /pack/{id} w wysyłanych mailach.",
+    )
+    parser.add_argument(
         "--city",
         type=str,
         default="Warszawa",
@@ -197,6 +214,49 @@ def build_parser() -> argparse.ArgumentParser:
 async def async_main(args: argparse.Namespace) -> int:
     db = LeadDatabase(args.db)
     buyer_db = BuyerDatabase(args.db)
+
+    # --- Automated Outreach Mailer CLI modes ---
+    if args.send_outreach or args.send_batch:
+        from outreach_mailer import OutreachDatabase, OutreachMailerService
+        from pack_store import PackDatabase
+
+        pack_db = PackDatabase(args.db)
+        outreach_db = OutreachDatabase(args.db)
+        mailer = OutreachMailerService(
+            lead_db=db, buyer_db=buyer_db, pack_db=pack_db, outreach_db=outreach_db
+        )
+        if args.send_outreach:
+            res = await mailer.send_to_buyer(
+                buyer_domain=args.send_outreach,
+                base_url=args.base_url,
+                min_score=args.min_score,
+            )
+            if args.json:
+                print(json.dumps(res, ensure_ascii=False, indent=2))
+            else:
+                log = res["log"]
+                print(
+                    f"[{res['status'].upper()} / {res['provider']}] -> {log['agency_name']} ({log['recipient_email']}) | "
+                    f"Załącznik: {log['attachment_filename']} ({log['attachment_bytes']} B)"
+                )
+            return 0
+        else:
+            batch = await mailer.send_batch(
+                base_url=args.base_url,
+                city=args.city,
+                agency_type=args.agency_type,
+                limit=max(1, args.limit),
+                min_score=args.min_score,
+            )
+            if args.json:
+                print(json.dumps(batch, ensure_ascii=False, indent=2))
+            else:
+                print(
+                    f"Outreach Batch ({batch['provider']}): wysłano={batch['sent_count']}, "
+                    f"pominięto={batch['skipped_count']}, błędów={batch['failed_count']} "
+                    f"| Limit dzienny: {batch['kpis']['sent_today']}/{batch['kpis']['daily_limit']}"
+                )
+            return 0
 
     # --- Buyer Finder CLI modes ---
     if args.find_buyers:

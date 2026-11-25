@@ -564,6 +564,71 @@
           </table>
         </div>
       </section>
+
+      <!-- Automated Outreach Mailer (Specialist #8) -->
+      <section class="surface-card rounded-xl p-5 space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div class="flex flex-wrap items-center gap-2">
+              <h2 class="text-sm font-semibold text-slate-100">Automat Wysyłkowy (Outreach Mailer)</h2>
+              <span id="mailer-provider-badge" class="rounded bg-slate-800 px-2 py-0.5 font-mono text-[11px] text-slate-300 ring-1 ring-slate-700">Sandbox</span>
+            </div>
+            <p class="mt-0.5 text-xs text-slate-400">
+              Wysyła spersonalizowane oferty Teaser-First z automatycznym załącznikiem Demo CSV i linkiem <code class="font-mono text-slate-300">/pack/{id}</code> (ochrona: limit dzienny + 7-dniowy cooldown).
+            </p>
+          </div>
+          <div class="flex items-center gap-3 font-mono text-xs">
+            <span id="mailer-quota-pill" class="rounded-lg bg-slate-900 px-3 py-1.5 text-emerald-300 ring-1 ring-slate-800">Dziś: 0 / 20</span>
+          </div>
+        </div>
+
+        <form id="outreach-batch-form" class="grid grid-cols-1 gap-3 rounded-xl bg-slate-950/60 p-4 ring-1 ring-slate-800/80 sm:grid-cols-12">
+          <div class="sm:col-span-4">
+            <label for="outreach-sender-name" class="mb-1 block text-[11px] text-slate-400">Podpis nadawcy</label>
+            <input id="outreach-sender-name" type="text" value="Zespół SignalLead PL" class="w-full rounded-lg border border-slate-700/80 bg-slate-950 px-3 py-1.5 text-xs text-slate-100 focus:border-emerald-500 focus:outline-none" />
+          </div>
+          <div class="sm:col-span-3">
+            <label for="outreach-batch-city" class="mb-1 block text-[11px] text-slate-400">Miasto agencji (Nowe)</label>
+            <select id="outreach-batch-city" class="w-full rounded-lg border border-slate-700/80 bg-slate-950 px-3 py-1.5 text-xs text-slate-200"></select>
+          </div>
+          <div class="sm:col-span-2">
+            <label for="outreach-batch-limit" class="mb-1 block text-[11px] text-slate-400">Limit serii</label>
+            <select id="outreach-batch-limit" class="w-full rounded-lg border border-slate-700/80 bg-slate-950 px-3 py-1.5 text-xs text-slate-200">
+              <option value="2">2 agencje</option>
+              <option value="5" selected>5 agencji</option>
+              <option value="10">10 agencji</option>
+            </select>
+          </div>
+          <div class="flex items-end sm:col-span-3">
+            <button id="btn-outreach-batch" type="submit" class="w-full rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-50">
+              Wyślij serię (+ Demo CSV)
+            </button>
+          </div>
+          <div id="outreach-batch-msg" class="text-xs text-slate-400 sm:col-span-12"></div>
+        </form>
+
+        <div>
+          <div class="mb-2 flex items-center justify-between">
+            <h3 class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Historia wysłanych ofert (Outreach Logs)</h3>
+            <button id="btn-refresh-outreach" type="button" class="text-[11px] text-slate-400 hover:text-slate-200">Odśwież logi</button>
+          </div>
+          <div class="custom-scroll overflow-x-auto rounded-lg ring-1 ring-slate-800/80">
+            <table class="w-full min-w-[780px] border-collapse text-left text-xs">
+              <thead>
+                <tr class="border-b border-slate-800 bg-slate-900/70 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                  <th class="px-3 py-2">Data</th>
+                  <th class="px-3 py-2">Agencja &amp; Odbiorca</th>
+                  <th class="px-3 py-2">Temat &amp; Załącznik</th>
+                  <th class="px-3 py-2 text-right">Status</th>
+                </tr>
+              </thead>
+              <tbody id="outreach-logs-tbody" class="divide-y divide-slate-800/60">
+                <tr><td colspan="4" class="px-3 py-6 text-center text-slate-500">Brak wysłanych wiadomości.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
     </div><!-- /#view-buyers -->
 
     <!-- ==================== PACK STORE & STRIPE VIEW (STAGE 2 / MODULE 2) ==================== -->
@@ -873,9 +938,10 @@
         statusSel.appendChild(opt);
       });
 
-      // Pack Store dropdowns
+      // Pack Store & Outreach Mailer dropdowns
       fillSelect($('pack-city'), data.cities, true, 'Wszystkie miasta');
       fillSelect($('pack-industry'), data.industries, true, 'Wszystkie branże');
+      fillSelect($('outreach-batch-city'), data.cities, true, 'Wszystkie miasta');
     }
 
     async function fetchLeads() {
@@ -1301,7 +1367,10 @@
           : 'border-b-2 border-transparent px-4 py-2.5 text-xs font-semibold text-slate-400 transition hover:text-slate-200';
       });
 
-      if (tab === 'buyers') fetchBuyers();
+      if (tab === 'buyers') {
+        fetchBuyers();
+        fetchOutreachStatus();
+      }
       if (tab === 'packs') {
         syncPackBuyerSelect();
         fetchPacks();
@@ -1486,6 +1555,7 @@
       const matchPersonaOnly = $('offer-match-persona').checked;
 
       try {
+        const senderName = $('outreach-sender-name')?.value?.trim() || 'Zespół SignalLead PL';
         const res = await fetch(`/api/buyers/${encodeURIComponent(buyer.domain)}/offer`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1493,12 +1563,15 @@
             pack_city: packCity === 'Wszystkie' ? null : packCity,
             min_score: minScore,
             match_persona_only: matchPersonaOnly,
+            sender_name: senderName,
           }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Błąd generowania oferty');
         const o = data.offer;
         const k = o.matched_kpis || {};
+        const provider = state.meta.mailer_provider || 'sandbox';
+        const providerLabel = provider === 'resend' ? 'Resend' : provider === 'smtp' ? 'SMTP' : 'Sandbox';
         const mailtoHref = o.recipient_email
           ? `mailto:${encodeURIComponent(o.recipient_email)}?subject=${encodeURIComponent(o.subject)}&body=${encodeURIComponent(o.email_body)}`
           : null;
@@ -1524,31 +1597,36 @@
           </div>
 
           <div class="flex flex-wrap items-center gap-2">
-            <a href="${escapeHtml(o.teaser_csv_url)}" class="inline-flex items-center gap-1.5 rounded-lg bg-amber-500 px-3.5 py-2 text-xs font-semibold text-slate-950 hover:bg-amber-400">
-              1. Pobierz załącznik Demo CSV
+            ${o.recipient_email
+              ? `<button id="btn-send-auto-now" type="button" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-4 py-2 text-xs font-bold text-slate-950 transition hover:bg-emerald-400 disabled:opacity-50">
+                  Wyślij automatycznie (+ Demo CSV · ${providerLabel})
+                </button>`
+              : '<span class="rounded-lg bg-rose-500/10 px-3 py-2 text-xs text-rose-300 ring-1 ring-rose-500/25">Brak e-maila agencji — użyj LinkedIn DM</span>'}
+            <a href="${escapeHtml(o.teaser_csv_url)}" class="inline-flex items-center gap-1.5 rounded-lg bg-amber-500/20 px-3 py-2 text-xs font-semibold text-amber-200 ring-1 ring-amber-500/30 hover:bg-amber-500/30">
+              Pobierz Demo CSV
             </a>
             ${mailtoHref
-              ? `<a href="${mailtoHref}" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-emerald-500">2. Otwórz w programie pocztowym</a>`
+              ? `<a href="${mailtoHref}" class="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-3 py-2 text-xs font-medium text-slate-200 ring-1 ring-slate-700 hover:bg-slate-700">Otwórz mailto:</a>`
               : ''}
-            <button id="btn-mark-sent-now" type="button" class="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-3.5 py-2 text-xs font-semibold text-emerald-300 ring-1 ring-emerald-500/30 hover:bg-slate-700">
-              ✓ Oznacz jako „Wysłano Demo”
+            <button id="btn-mark-sent-now" type="button" class="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-3 py-2 text-xs font-semibold text-emerald-300 ring-1 ring-emerald-500/30 hover:bg-slate-700">
+              ✓ Wysłano Demo
             </button>
           </div>
 
           <div class="rounded-xl border border-slate-800 bg-slate-950/80 p-4">
             <div class="mb-2 flex items-center justify-between gap-2">
-              <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Temat Cold Maila</span>
+              <label for="offer-edit-subject" class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Temat Cold Maila (edytowalny)</label>
               <button id="btn-copy-subject" type="button" class="rounded bg-slate-800 px-2.5 py-1 text-[11px] font-medium text-slate-200 hover:bg-slate-700">Kopiuj temat</button>
             </div>
-            <p class="font-medium text-slate-100">${escapeHtml(o.subject)}</p>
+            <input id="offer-edit-subject" type="text" value="${escapeHtml(o.subject)}" class="w-full rounded-lg border border-slate-800 bg-slate-900/90 px-3 py-2 text-xs font-medium text-slate-100 focus:border-emerald-500 focus:outline-none" />
           </div>
 
           <div class="rounded-xl border border-emerald-500/25 bg-emerald-500/5 p-4">
             <div class="mb-2 flex items-center justify-between gap-2">
-              <span class="text-[11px] font-semibold uppercase tracking-wider text-emerald-300">Treść Cold Maila (Teaser-First)</span>
-              <button id="btn-copy-email" type="button" class="rounded bg-emerald-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-emerald-500">Kopiuj treść maila</button>
+              <label for="offer-edit-body" class="text-[11px] font-semibold uppercase tracking-wider text-emerald-300">Treść Cold Maila (Teaser-First · edytowalna)</label>
+              <button id="btn-copy-email" type="button" class="rounded bg-emerald-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-emerald-500">Kopiuj treść</button>
             </div>
-            <pre class="whitespace-pre-wrap font-sans text-xs leading-relaxed text-slate-100">${escapeHtml(o.email_body)}</pre>
+            <textarea id="offer-edit-body" rows="11" class="w-full rounded-lg border border-slate-800 bg-slate-950/90 p-3 font-sans text-xs leading-relaxed text-slate-100 focus:border-emerald-500 focus:outline-none">${escapeHtml(o.email_body)}</textarea>
           </div>
 
           <div class="rounded-xl border border-sky-500/25 bg-sky-500/5 p-4">
@@ -1561,17 +1639,49 @@
         `;
 
         $('btn-copy-subject').addEventListener('click', async () => {
-          await navigator.clipboard.writeText(o.subject);
+          await navigator.clipboard.writeText($('offer-edit-subject').value);
           showToast('Skopiowano temat maila!');
         });
         $('btn-copy-email').addEventListener('click', async () => {
-          await navigator.clipboard.writeText(o.email_body);
+          await navigator.clipboard.writeText($('offer-edit-body').value);
           showToast('Skopiowano treść Cold Maila!');
         });
         $('btn-copy-li').addEventListener('click', async () => {
           await navigator.clipboard.writeText(o.linkedin_dm);
           showToast('Skopiowano wiadomość LinkedIn DM!');
         });
+        const sendAutoBtn = $('btn-send-auto-now');
+        if (sendAutoBtn) {
+          sendAutoBtn.addEventListener('click', async () => {
+            sendAutoBtn.disabled = true;
+            sendAutoBtn.textContent = 'Wysyłam z załącznikiem Demo CSV...';
+            try {
+              const sRes = await fetch(`/api/outreach/send/${encodeURIComponent(buyer.domain)}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  pack_city: packCity === 'Wszystkie' ? null : packCity,
+                  min_score: minScore,
+                  match_persona_only: matchPersonaOnly,
+                  sender_name: senderName,
+                  custom_subject: $('offer-edit-subject').value.trim(),
+                  custom_body: $('offer-edit-body').value.trim(),
+                  attach_demo_csv: true,
+                }),
+              });
+              const sData = await sRes.json();
+              if (!sRes.ok) throw new Error(sData.detail || 'Błąd wysyłki');
+              const modeTxt = sData.status === 'sent' ? 'Wysłano realny e-mail' : 'Zasymulowano (Sandbox)';
+              showToast(`${modeTxt} do ${buyer.agency_name} (${sData.log.attachment_filename})`);
+              await Promise.all([fetchBuyers(), fetchOutreachStatus()]);
+              sendAutoBtn.textContent = '✓ Wysłano (+ Demo CSV)';
+            } catch (err) {
+              showToast(err.message, true);
+              sendAutoBtn.disabled = false;
+              sendAutoBtn.textContent = `Wyślij automatycznie (+ Demo CSV · ${providerLabel})`;
+            }
+          });
+        }
         $('btn-mark-sent-now').addEventListener('click', async () => {
           await fetch(`/api/buyers/${encodeURIComponent(buyer.domain)}/status`, {
             method: 'PATCH',
@@ -1931,12 +2041,107 @@
 
     $('btn-refresh-packs').addEventListener('click', fetchPacks);
 
+    // ==================== AUTOMATED OUTREACH MAILER (STAGE 2 / MODULE 3) ====================
+
+    async function fetchOutreachStatus() {
+      try {
+        const res = await fetch('/api/outreach/status?limit=25');
+        const data = await res.json();
+        const k = data.kpis || {};
+        const provider = data.provider || 'sandbox';
+
+        const badge = $('mailer-provider-badge');
+        if (provider === 'resend') {
+          badge.textContent = 'Resend API LIVE';
+          badge.className = 'rounded bg-emerald-500/15 px-2 py-0.5 font-mono text-[11px] font-semibold text-emerald-300 ring-1 ring-emerald-500/30';
+        } else if (provider === 'smtp') {
+          badge.textContent = 'SMTP LIVE';
+          badge.className = 'rounded bg-emerald-500/15 px-2 py-0.5 font-mono text-[11px] font-semibold text-emerald-300 ring-1 ring-emerald-500/30';
+        } else {
+          badge.textContent = 'Tryb Sandbox (brak klucza Resend/SMTP)';
+          badge.className = 'rounded bg-amber-500/15 px-2 py-0.5 font-mono text-[11px] font-semibold text-amber-300 ring-1 ring-amber-500/30';
+        }
+
+        $('mailer-quota-pill').textContent = `Dziś: ${k.sent_today ?? 0} / ${k.daily_limit ?? 20} (pozostało ${k.remaining_today ?? 0})`;
+
+        const logs = data.logs || [];
+        const tbody = $('outreach-logs-tbody');
+        if (!logs.length) {
+          tbody.innerHTML = '<tr><td colspan="4" class="px-3 py-6 text-center text-slate-500">Brak wysłanych wiadomości — kliknij „Generuj Ofertę” przy agencji lub uruchom serię powyżej.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = logs.map((l) => {
+          const dt = (l.sent_at || '').slice(0, 16).replace('T', ' ');
+          const statusBadge = l.status === 'sent'
+            ? '<span class="rounded bg-emerald-500/15 px-2 py-0.5 font-mono text-[10px] font-semibold text-emerald-300">WYSŁANO</span>'
+            : l.status === 'simulated'
+              ? '<span class="rounded bg-amber-500/15 px-2 py-0.5 font-mono text-[10px] font-semibold text-amber-300">SANDBOX</span>'
+              : '<span class="rounded bg-rose-500/15 px-2 py-0.5 font-mono text-[10px] font-semibold text-rose-300">BŁĄD</span>';
+
+          return `
+            <tr class="hover:bg-slate-900/40">
+              <td class="whitespace-nowrap px-3 py-2.5 font-mono text-[11px] text-slate-400">${escapeHtml(dt)}</td>
+              <td class="px-3 py-2.5">
+                <div class="font-medium text-slate-100">${escapeHtml(l.agency_name)}</div>
+                <div class="font-mono text-[11px] text-emerald-300">${escapeHtml(l.recipient_email)}</div>
+              </td>
+              <td class="max-w-[380px] px-3 py-2.5">
+                <div class="truncate text-slate-200" title="${escapeHtml(l.subject)}">${escapeHtml(l.subject)}</div>
+                <div class="mt-0.5 flex flex-wrap items-center gap-2 font-mono text-[10px] text-slate-400">
+                  ${l.attachment_filename ? `<span>📎 ${escapeHtml(l.attachment_filename)} (${l.attachment_bytes} B)</span>` : ''}
+                  ${l.pack_id ? `<span class="text-sky-300">/pack/${escapeHtml(l.pack_id)}</span>` : ''}
+                </div>
+              </td>
+              <td class="px-3 py-2.5 text-right">${statusBadge}</td>
+            </tr>
+          `;
+        }).join('');
+      } catch {
+        // Ignore transient UI fetch error
+      }
+    }
+
+    $('btn-refresh-outreach').addEventListener('click', fetchOutreachStatus);
+
+    $('outreach-batch-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = $('btn-outreach-batch');
+      const msg = $('outreach-batch-msg');
+      btn.disabled = true;
+      btn.textContent = 'Wysyłam serię...';
+      msg.textContent = 'Przygotowuję spersonalizowane wiadomości i załączniki Demo CSV...';
+      try {
+        const res = await fetch('/api/outreach/batch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            city: $('outreach-batch-city').value,
+            limit: Number($('outreach-batch-limit').value),
+            sender_name: $('outreach-sender-name').value.trim() || 'Zespół SignalLead PL',
+            attach_demo_csv: true,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Błąd serii wysyłkowej');
+        msg.textContent = `Zakończono (${data.provider}): wysłano ${data.sent_count}, pominięto ${data.skipped_count}, błędów ${data.failed_count}.`;
+        showToast(`Seria zakończona: wysłano ${data.sent_count} ofert (+ Demo CSV)`);
+        await Promise.all([fetchBuyers(), fetchOutreachStatus()]);
+      } catch (err) {
+        msg.textContent = `Błąd: ${err.message}`;
+        showToast(err.message, true);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Wyślij serię (+ Demo CSV)';
+      }
+    });
+
     // Boot
     (async function init() {
       updateModeUI();
       updateScorePills();
       await loadMeta();
-      await Promise.all([fetchLeads(), fetchBuyers(), fetchPacks()]);
+      await Promise.all([fetchLeads(), fetchBuyers(), fetchPacks(), fetchOutreachStatus()]);
     })();
   </script>
 </body>

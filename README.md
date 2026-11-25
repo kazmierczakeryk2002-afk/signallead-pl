@@ -11,9 +11,10 @@
 | `engine.py` | **Silnik wieloagentowy:** `HarvesterAgent` (OpenStreetMap Overpass API + polska pula domen B2B), `SignalAuditorAgent` (audyt live strony głównej + `/kontakt`, `/o-nas`, ekstrakcja kontaktów i matematyczna walidacja NIP, scoring 0–99 pkt, klasyfikacja kupca, wycena leada i kontraktu, generator polskiego Icebreakera), `LeadDatabase` (SQLite, maskowanie Teaser, eksport CSV UTF-8-SIG). |
 | `buyer_finder.py` | **Moduł Buyer Finder (Etap 2 · Moduł 1):** `AgencyHarvesterAgent` (wyszukiwanie polskich agencji SEO/SEM, Performance 360, Digital i Software House'ów + skan live usług, e-maili, telefonów, NIP i LinkedIn), `OutreachOfferGenerator` (generator spersonalizowanych ofert Teaser-First — Cold Mail + LinkedIn DM + link `/pack/{id}`), `BuyerDatabase` (CRM statusów outreach w SQLite + eksport CSV). |
 | `pack_store.py` + `pack_page.html` | **Moduł Pack Store & Stripe Billing (Etap 2 · Moduł 2):** `PackDatabase` (zamrożone paczki na wyłączność 1:1, atomowa rezerwacja, wycena dynamiczna `-25%` + korekta ręczna PLN bez VAT, bezpieczny `download_token`), `StripeBillingService` (Stripe Checkout: BLIK + Karta + Przelewy24, zbieranie NIP i danych do faktury, webhooki + bezpieczny tryb Sandbox), publiczna strona sprzedażowa `/pack/{id}`. |
-| `app.py` | **Backend FastAPI:** REST API (`/api/leads`, `/api/buyers/*`, `/api/packs/*`, `/api/webhooks/stripe`, `/pack/{id}`, `/health`) + serwowanie panelu webowego. |
-| `dashboard.html` | **Panel Webowy (Tailwind Dark UI):** 3 zakładki (**Leady Sygnałowe** + **Buyer Finder** + **Paczki & Sprzedaż**), KPI paczek i przychodu, przełącznik **PEŁNE DANE vs DEMO / TEASER**, skanery live, CRM agencji, generator ofert i kreator paczek sprzedażowych. |
-| `cli.py` | **Narzędzie wsadowe CLI:** uruchamianie audytów, harvestera leadów, Buyer Findera, generatora ofert i eksportu CSV z terminala. |
+| `outreach_mailer.py` | **Moduł Outreach Mailer (Etap 2 · Moduł 3 / Specjalista #8):** `OutreachMailerService` + `OutreachDatabase` (automatyczna wysyłka ofert Teaser-First z prawdziwym załącznikiem Demo CSV i linkiem `/pack/{id}` przez **Resend API**, **SMTP** lub bezpieczny **Tryb Sandbox**, z dziennym limitem wysyłek i 7-dniowym cooldownem anty-spamowym). |
+| `app.py` | **Backend FastAPI:** REST API (`/api/leads`, `/api/buyers/*`, `/api/packs/*`, `/api/outreach/*`, `/api/webhooks/stripe`, `/pack/{id}`, `/health`) + serwowanie panelu webowego. |
+| `dashboard.html` | **Panel Webowy (Tailwind Dark UI):** 3 zakładki (**Leady Sygnałowe** + **Buyer Finder** + **Paczki & Sprzedaż**), KPI paczek i przychodu, przełącznik **PEŁNE DANE vs DEMO / TEASER**, skanery live, CRM agencji, generator ofert, automat wysyłkowy i kreator paczek sprzedażowych. |
+| `cli.py` | **Narzędzie wsadowe CLI:** uruchamianie audytów, harvestera leadów, Buyer Findera, generatora ofert, automatu wysyłkowego i eksportu CSV z terminala. |
 | `Dockerfile` | Gotowy obraz produkcyjny (Python 3.12-slim) pod Railway, Render, Fly.io lub własny VPS. |
 
 ---
@@ -68,25 +69,43 @@ python cli.py --find-buyers --city Kraków --limit 5 --export-csv outreach_agenc
 
 # Wygenerowanie pojedynczej oferty Teaser-First dla wybranej agencji
 python cli.py --generate-offer delante.pl
+
+# Automat Wysyłkowy — wysyłka pojedynczej oferty (+ załącznik Demo CSV) lub serii (Batch)
+python cli.py --send-outreach devagroup.pl --base-url https://twojadomena.pl
+python cli.py --send-batch --city Kraków --limit 5 --base-url https://twojadomena.pl
 ```
 
 ---
 
-## Konfiguracja Stripe (BLIK · Karta · Przelewy24 · PLN bez VAT)
+## Konfiguracja Stripe & Wysyłki E-mail (Produkcja)
 
-Bez ustawionych zmiennych środowiskowych aplikacja uruchamia się w bezpiecznym **Trybie Testowym (Sandbox)**, umożliwiając przetestowanie całego przepływu zakupu i odblokowania CSV lokalnie.
+Bez ustawionych zmiennych środowiskowych płatności i wysyłka działają w bezpiecznym **Trybie Testowym (Sandbox)**.
 
-Aby przełączyć sklep `/pack/{id}` na prawdziwe płatności Stripe:
-
+### Stripe (BLIK · Karta · Przelewy24 · PLN bez VAT)
 ```bash
 export STRIPE_SECRET_KEY="sk_live_..."          # lub sk_test_... na start
 export STRIPE_WEBHOOK_SECRET="whsec_..."        # z Stripe Dashboard -> Webhooks
 export PUBLIC_BASE_URL="https://twojadomena.pl" # adres publiczny do redirectów i linków w mailach
 ```
+Webhook Stripe: `POST https://twojadomena.pl/api/webhooks/stripe` (`checkout.session.completed`, `checkout.session.expired`).
 
-W panelu Stripe utwórz Webhook wskazujący na `POST https://twojadomena.pl/api/webhooks/stripe` z nasłuchem zdarzeń:
-- `checkout.session.completed` (automatyczne oznaczenie paczki jako `sold`, blokada dla innych agencji, wygenerowanie `download_token`, zapis NIP/danych do faktury i zmiana statusu agencji w CRM na `Opłacona`),
-- `checkout.session.expired` (zwolnienie 20-minutowej rezerwacji, jeśli kupujący przerwał płatność).
+### Automat Wysyłkowy (Resend API lub SMTP)
+```bash
+# Opcja 1 (zalecana w chmurze Railway/Render): Resend API
+export RESEND_API_KEY="re_..."
+export MAIL_FROM="SignalLead PL <kontakt@twojadomena.pl>"
+export MAIL_REPLY_TO="kontakt@twojadomena.pl"
+
+# Opcja 2: Dowolny serwer SMTP (np. Google Workspace, Zoho, OVH, cyber_Folks)
+# export SMTP_HOST="smtp.twojadomena.pl"
+# export SMTP_PORT="587"
+# export SMTP_USER="kontakt@twojadomena.pl"
+# export SMTP_PASSWORD="..."
+
+# Bezpieczne limity anty-spamowe
+export DAILY_SEND_LIMIT="20"
+export OUTREACH_COOLDOWN_DAYS="7"
+```
 
 ---
 
@@ -98,7 +117,7 @@ W panelu Stripe utwórz Webhook wskazujący na `POST https://twojadomena.pl/api/
 | `GET` | `/pack/{pack_id}` | Publiczna strona sprzedażowa paczki na wyłączność (podgląd Teaser + zakup) |
 | `GET` | `/pack/{pack_id}/success` | Strona po płatności z odblokowanym pobieraniem pełnego CSV/JSON |
 | `GET` | `/health` | Healthcheck dla Railway / Render / Fly.io |
-| `GET` | `/api/meta` | Lista obsługiwanych miast, branż, typów agencji, statusów CRM i trybu Stripe |
+| `GET` | `/api/meta` | Lista obsługiwanych miast, branż, typów agencji, statusów CRM i aktywnych integracji |
 | `GET` | `/api/leads?min_score=0&teaser=false` | Lista leadów + KPI (obsługuje `city`, `industry`, `buyer_persona`, `search`) |
 | `POST` | `/api/audit` | Audyt pojedynczej domeny na żywo (`{"url": "...", "city": "...", "industry": "..."}`) |
 | `POST` | `/api/harvest` | Batch harvest + audyt (`{"city": "Warszawa", "industry": "...", "limit": 5}`) |
@@ -115,6 +134,9 @@ W panelu Stripe utwórz Webhook wskazujący na `POST https://twojadomena.pl/api/
 | `POST` | `/api/packs/{pack_id}/checkout` | Utworzenie sesji Stripe Checkout (PLN, BLIK/Karta/P24, NIP, wyłączność) |
 | `GET` | `/api/packs/{pack_id}/download/csv?token=...` | Pobranie pełnego pliku CSV po walidacji `download_token` |
 | `POST` | `/api/webhooks/stripe` | Webhook Stripe obsługujący `checkout.session.completed` i `checkout.session.expired` |
+| `GET` | `/api/outreach/status` | Status silnika wysyłkowego (Resend/SMTP/Sandbox), dzienny limit i logi wysyłek |
+| `POST` | `/api/outreach/send/{domain}` | Wyślij ofertę Teaser-First (+ załącznik Demo CSV) do wybranej agencji |
+| `POST` | `/api/outreach/batch` | Wyślij bezpieczną serię ofert do nowych agencji z limitem dziennym i cooldownem |
 
 ---
 
