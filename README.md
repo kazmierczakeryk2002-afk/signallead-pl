@@ -9,9 +9,10 @@
 | Moduł | Rola |
 |---|---|
 | `engine.py` | **Silnik wieloagentowy:** `HarvesterAgent` (OpenStreetMap Overpass API + polska pula domen B2B), `SignalAuditorAgent` (audyt live strony głównej + `/kontakt`, `/o-nas`, ekstrakcja kontaktów i matematyczna walidacja NIP, scoring 0–99 pkt, klasyfikacja kupca, wycena leada i kontraktu, generator polskiego Icebreakera), `LeadDatabase` (SQLite, maskowanie Teaser, eksport CSV UTF-8-SIG). |
-| `buyer_finder.py` | **Moduł Buyer Finder (Etap 2):** `AgencyHarvesterAgent` (wyszukiwanie polskich agencji SEO/SEM, Performance 360, Digital i Software House'ów + skan live usług, e-maili, telefonów, NIP i LinkedIn), `OutreachOfferGenerator` (generator spersonalizowanych ofert Teaser-First — Cold Mail + LinkedIn DM + załącznik Demo CSV), `BuyerDatabase` (CRM statusów outreach w SQLite + eksport CSV gotowy pod Woodpecker/Instantly). |
-| `app.py` | **Backend FastAPI:** REST API (`/api/leads`, `/api/audit`, `/api/harvest`, `/api/export/csv`, `/api/buyers/*`, `/health`) + serwowanie panelu webowego. |
-| `dashboard.html` | **Panel Webowy (Tailwind Dark UI):** 2 zakładki (**Leady Sygnałowe** + **Buyer Finder**), KPI paczki (`-25%` i pipeline kontraktów), przełącznik **PEŁNE DANE vs DEMO / TEASER**, skanery live, CRM agencji i modal **Generator Oferty Teaser-First**. |
+| `buyer_finder.py` | **Moduł Buyer Finder (Etap 2 · Moduł 1):** `AgencyHarvesterAgent` (wyszukiwanie polskich agencji SEO/SEM, Performance 360, Digital i Software House'ów + skan live usług, e-maili, telefonów, NIP i LinkedIn), `OutreachOfferGenerator` (generator spersonalizowanych ofert Teaser-First — Cold Mail + LinkedIn DM + link `/pack/{id}`), `BuyerDatabase` (CRM statusów outreach w SQLite + eksport CSV). |
+| `pack_store.py` + `pack_page.html` | **Moduł Pack Store & Stripe Billing (Etap 2 · Moduł 2):** `PackDatabase` (zamrożone paczki na wyłączność 1:1, atomowa rezerwacja, wycena dynamiczna `-25%` + korekta ręczna PLN bez VAT, bezpieczny `download_token`), `StripeBillingService` (Stripe Checkout: BLIK + Karta + Przelewy24, zbieranie NIP i danych do faktury, webhooki + bezpieczny tryb Sandbox), publiczna strona sprzedażowa `/pack/{id}`. |
+| `app.py` | **Backend FastAPI:** REST API (`/api/leads`, `/api/buyers/*`, `/api/packs/*`, `/api/webhooks/stripe`, `/pack/{id}`, `/health`) + serwowanie panelu webowego. |
+| `dashboard.html` | **Panel Webowy (Tailwind Dark UI):** 3 zakładki (**Leady Sygnałowe** + **Buyer Finder** + **Paczki & Sprzedaż**), KPI paczek i przychodu, przełącznik **PEŁNE DANE vs DEMO / TEASER**, skanery live, CRM agencji, generator ofert i kreator paczek sprzedażowych. |
 | `cli.py` | **Narzędzie wsadowe CLI:** uruchamianie audytów, harvestera leadów, Buyer Findera, generatora ofert i eksportu CSV z terminala. |
 | `Dockerfile` | Gotowy obraz produkcyjny (Python 3.12-slim) pod Railway, Render, Fly.io lub własny VPS. |
 
@@ -71,13 +72,33 @@ python cli.py --generate-offer delante.pl
 
 ---
 
+## Konfiguracja Stripe (BLIK · Karta · Przelewy24 · PLN bez VAT)
+
+Bez ustawionych zmiennych środowiskowych aplikacja uruchamia się w bezpiecznym **Trybie Testowym (Sandbox)**, umożliwiając przetestowanie całego przepływu zakupu i odblokowania CSV lokalnie.
+
+Aby przełączyć sklep `/pack/{id}` na prawdziwe płatności Stripe:
+
+```bash
+export STRIPE_SECRET_KEY="sk_live_..."          # lub sk_test_... na start
+export STRIPE_WEBHOOK_SECRET="whsec_..."        # z Stripe Dashboard -> Webhooks
+export PUBLIC_BASE_URL="https://twojadomena.pl" # adres publiczny do redirectów i linków w mailach
+```
+
+W panelu Stripe utwórz Webhook wskazujący na `POST https://twojadomena.pl/api/webhooks/stripe` z nasłuchem zdarzeń:
+- `checkout.session.completed` (automatyczne oznaczenie paczki jako `sold`, blokada dla innych agencji, wygenerowanie `download_token`, zapis NIP/danych do faktury i zmiana statusu agencji w CRM na `Opłacona`),
+- `checkout.session.expired` (zwolnienie 20-minutowej rezerwacji, jeśli kupujący przerwał płatność).
+
+---
+
 ## API Reference
 
 | Metoda | Endpoint | Opis |
 |---|---|---|
-| `GET` | `/` | Panel Webowy Dashboard (Leady Sygnałowe + Buyer Finder) |
+| `GET` | `/` | Panel Webowy Dashboard (Leady Sygnałowe + Buyer Finder + Paczki & Sprzedaż) |
+| `GET` | `/pack/{pack_id}` | Publiczna strona sprzedażowa paczki na wyłączność (podgląd Teaser + zakup) |
+| `GET` | `/pack/{pack_id}/success` | Strona po płatności z odblokowanym pobieraniem pełnego CSV/JSON |
 | `GET` | `/health` | Healthcheck dla Railway / Render / Fly.io |
-| `GET` | `/api/meta` | Lista obsługiwanych miast, branż, typów agencji i statusów CRM |
+| `GET` | `/api/meta` | Lista obsługiwanych miast, branż, typów agencji, statusów CRM i trybu Stripe |
 | `GET` | `/api/leads?min_score=0&teaser=false` | Lista leadów + KPI (obsługuje `city`, `industry`, `buyer_persona`, `search`) |
 | `POST` | `/api/audit` | Audyt pojedynczej domeny na żywo (`{"url": "...", "city": "...", "industry": "..."}`) |
 | `POST` | `/api/harvest` | Batch harvest + audyt (`{"city": "Warszawa", "industry": "...", "limit": 5}`) |
@@ -86,9 +107,14 @@ python cli.py --generate-offer delante.pl
 | `GET` | `/api/buyers` | Lista agencji (Buyer Finder) + KPI outreach |
 | `POST` | `/api/buyers/harvest` | Wyszukaj i wzbogać polskie agencje (`{"city": "Kraków", "limit": 5}`) |
 | `POST` | `/api/buyers/add` | Dodaj i przeskanuj pojedynczą agencję na żywo |
-| `POST` | `/api/buyers/{domain}/offer` | Wygeneruj spersonalizowaną ofertę Teaser-First (Cold Mail + LinkedIn DM + Demo CSV URL) |
+| `POST` | `/api/buyers/{domain}/offer` | Wygeneruj spersonalizowaną ofertę Teaser-First (Cold Mail + LinkedIn DM + link `/pack/{id}`) |
 | `PATCH` | `/api/buyers/{domain}/status` | Zaktualizuj status CRM (`new`, `teaser_sent`, `replied`, `paid`, `rejected`) |
 | `GET` | `/api/buyers/export/csv` | Eksport agencji wraz z gotowymi cold mailami i DM (UTF-8-SIG CSV) |
+| `GET` / `POST` | `/api/packs` | Lista paczek sprzedażowych + KPI przychodu / Utworzenie paczki z korektą ceny |
+| `PATCH` / `DELETE` | `/api/packs/{pack_id}/price` | Zmiana ceny dostępnej paczki / Usunięcie niesprzedanej paczki |
+| `POST` | `/api/packs/{pack_id}/checkout` | Utworzenie sesji Stripe Checkout (PLN, BLIK/Karta/P24, NIP, wyłączność) |
+| `GET` | `/api/packs/{pack_id}/download/csv?token=...` | Pobranie pełnego pliku CSV po walidacji `download_token` |
+| `POST` | `/api/webhooks/stripe` | Webhook Stripe obsługujący `checkout.session.completed` i `checkout.session.expired` |
 
 ---
 

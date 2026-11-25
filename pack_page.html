@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="pl" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SignalLead PL — Paczka Leadów Sygnałowych B2B (Na wyłączność)</title>
+  <meta name="description" content="Podgląd paczki zweryfikowanych leadów sygnałowych B2B w Polsce — zakup na wyłączność (BLIK, Karta, Przelewy24) i natychmiastowe pobranie pełnego pliku CSV/JSON." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    body {
+      background-color: #090d12;
+      color: #e6edf5;
+      font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    }
+    .surface-card {
+      background: linear-gradient(180deg, rgba(22, 31, 44, 0.78) 0%, rgba(16, 22, 31, 0.96) 100%);
+      border: 1px solid rgba(148, 163, 184, 0.13);
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 14px 36px -18px rgba(0, 0, 0, 0.7);
+    }
+    .custom-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+    .custom-scroll::-webkit-scrollbar-track { background: #0d121a; }
+    .custom-scroll::-webkit-scrollbar-thumb { background: #273447; border-radius: 4px; }
+  </style>
+</head>
+<body class="min-h-screen antialiased selection:bg-emerald-500/20 selection:text-emerald-200">
+  <!-- Minimal High-Trust Agency Header -->
+  <header class="border-b border-slate-800/80 bg-[#090d12]/90 backdrop-blur-md">
+    <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
+      <div class="flex items-center gap-3">
+        <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30">
+          <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+        </div>
+        <div>
+          <span class="text-sm font-semibold tracking-tight text-slate-100">SignalLead PL</span>
+          <span class="ml-2 rounded bg-slate-800 px-2 py-0.5 font-mono text-[10px] text-slate-300 ring-1 ring-slate-700">
+            Teaser-First B2B Pack
+          </span>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 text-xs">
+        <span id="billing-mode-badge" class="hidden rounded-md px-2.5 py-1 font-mono text-[11px]"></span>
+        <span class="rounded-md bg-emerald-500/10 px-2.5 py-1 font-medium text-emerald-300 ring-1 ring-emerald-500/25">
+          Wyłączność 1:1 (1 agencja)
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <main id="app-root" class="mx-auto max-w-6xl space-y-6 px-4 py-8 sm:px-6">
+    <div class="surface-card rounded-2xl p-12 text-center text-sm text-slate-400">
+      Ładowanie paczki leadów sygnałowych...
+    </div>
+  </main>
+
+  <!-- Sandbox Test Checkout Modal (shown only when STRIPE_SECRET_KEY is not configured) -->
+  <div id="sandbox-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+    <div class="surface-card w-full max-w-lg rounded-2xl p-6">
+      <div class="flex items-start justify-between gap-4 border-b border-slate-800 pb-4">
+        <div>
+          <span class="rounded bg-amber-500/15 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase text-amber-300 ring-1 ring-amber-500/30">
+            Tryb Testowy (Brak STRIPE_SECRET_KEY)
+          </span>
+          <h2 class="mt-2 text-base font-semibold text-slate-100">Symulacja płatności BLIK / P24 / Karta</h2>
+          <p class="mt-0.5 text-xs text-slate-400">Przetestuj pełny przepływ zakupu na wyłączność i odblokowania pliku CSV/JSON.</p>
+        </div>
+        <button id="btn-close-sandbox" type="button" class="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-100">✕</button>
+      </div>
+
+      <form id="sandbox-form" class="mt-4 space-y-3.5 text-xs">
+        <div>
+          <label for="sb-name" class="mb-1 block font-medium text-slate-300">Nazwa agencji / firmy nabywcy *</label>
+          <input id="sb-name" type="text" required placeholder="np. DevaGroup Sp. z o.o." class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none" />
+        </div>
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div>
+            <label for="sb-email" class="mb-1 block font-medium text-slate-300">E-mail do dostawy paczki *</label>
+            <input id="sb-email" type="email" required placeholder="kontakt@agencja.pl" class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none" />
+          </div>
+          <div>
+            <label for="sb-nip" class="mb-1 block font-medium text-slate-300">NIP (do rachunku / faktury)</label>
+            <input id="sb-nip" type="text" placeholder="np. 6772445840" class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-slate-100 focus:border-emerald-500 focus:outline-none" />
+          </div>
+        </div>
+        <div>
+          <label for="sb-address" class="mb-1 block font-medium text-slate-300">Adres rozliczeniowy</label>
+          <input id="sb-address" type="text" placeholder="ul. Przykładowa 10, 30-001 Kraków" class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none" />
+        </div>
+        <div>
+          <label for="sb-method" class="mb-1 block font-medium text-slate-300">Metoda płatności</label>
+          <select id="sb-method" class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none">
+            <option value="blik">BLIK (natychmiastowe odblokowanie)</option>
+            <option value="p24">Przelewy24 (P24)</option>
+            <option value="card">Karta płatnicza</option>
+          </select>
+        </div>
+        <p id="sb-error" class="hidden rounded-lg bg-rose-500/10 px-3 py-2 text-rose-300 ring-1 ring-rose-500/30"></p>
+        <div class="flex items-center justify-end gap-2 pt-2">
+          <button id="btn-cancel-sandbox" type="button" class="rounded-lg bg-slate-800 px-3.5 py-2 font-medium text-slate-300 hover:bg-slate-700">Anuluj</button>
+          <button id="btn-submit-sandbox" type="submit" class="rounded-lg bg-emerald-600 px-4 py-2 font-semibold text-white hover:bg-emerald-500">
+            Symuluj opłacenie i odblokuj paczkę
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="toast" class="pointer-events-none fixed bottom-5 right-5 z-50 hidden rounded-lg border border-emerald-500/40 bg-slate-900/95 px-4 py-2.5 text-xs font-medium text-emerald-200 shadow-xl"></div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    function formatPLN(val) {
+      return new Intl.NumberFormat('pl-PL').format(val || 0) + ' PLN';
+    }
+
+    function escapeHtml(str) {
+      return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function showToast(msg) {
+      const el = $('toast');
+      el.textContent = msg;
+      el.classList.remove('hidden');
+      clearTimeout(window.__toastT);
+      window.__toastT = setTimeout(() => el.classList.add('hidden'), 2800);
+    }
+
+    function parseRoute() {
+      const parts = window.location.pathname.split('/').filter(Boolean);
+      // /pack/{pack_id} or /pack/{pack_id}/success
+      const packId = parts[1] || '';
+      const isSuccess = parts[2] === 'success';
+      const params = new URLSearchParams(window.location.search);
+      return {
+        packId,
+        isSuccess,
+        sessionId: params.get('session_id') || '',
+        canceled: params.get('canceled') === '1',
+      };
+    }
+
+    function scoreBadgeClass(score) {
+      if (score >= 75) return 'bg-rose-500/15 text-rose-300 ring-1 ring-rose-500/35';
+      if (score >= 55) return 'bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/35';
+      return 'bg-slate-800 text-slate-300 ring-1 ring-slate-700';
+    }
+
+    function renderLeadsTable(leads, unlocked = false) {
+      return `
+        <section class="surface-card overflow-hidden rounded-2xl">
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 px-5 py-3.5">
+            <div>
+              <h2 class="text-sm font-semibold text-slate-100">
+                ${unlocked ? 'Odblokowane leady B2B (Pełne dane)' : 'Podgląd zawartości paczki (Tryb Demo / Teaser)'}
+              </h2>
+              <p class="text-xs text-slate-400">
+                ${unlocked
+                  ? 'Wszystkie domeny, NIP-y, e-maile, telefony oraz gotowe Icebreakery są już odblokowane.'
+                  : 'Nazwy firm, domeny, NIP i kontakty są zamaskowane do czasu zakupu. Wszystkie wykryte błędy i wyceny kontraktów są w 100% prawdziwe.'}
+              </p>
+            </div>
+            <span class="rounded bg-slate-800 px-2.5 py-1 font-mono text-[11px] text-slate-300">${leads.length} firm</span>
+          </div>
+
+          <div class="custom-scroll overflow-x-auto">
+            <table class="w-full min-w-[960px] border-collapse text-left text-xs">
+              <thead>
+                <tr class="border-b border-slate-800 bg-slate-900/70 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                  <th class="px-4 py-3">Firma &amp; Domena</th>
+                  <th class="px-3 py-3 text-center">Score</th>
+                  <th class="px-3 py-3">Wykryte błędy (Web / SEO / Ads)</th>
+                  <th class="px-3 py-3">Kontakt &amp; NIP</th>
+                  <th class="px-4 py-3 text-right">Potencjał kontraktu</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800/70">
+                ${leads.map((l, idx) => `
+                  <tr class="hover:bg-slate-900/40">
+                    <td class="px-4 py-3.5 align-top">
+                      <div class="font-semibold text-slate-100">${escapeHtml(l.company_name)}</div>
+                      <div class="mt-0.5 font-mono ${unlocked ? 'text-emerald-400' : 'text-amber-300'}">
+                        ${unlocked
+                          ? `<a href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer" class="hover:underline">${escapeHtml(l.domain)}</a>`
+                          : escapeHtml(l.domain)}
+                      </div>
+                      <div class="mt-1 flex flex-wrap gap-1.5 text-[11px] text-slate-400">
+                        <span class="rounded bg-slate-800/80 px-1.5 py-0.5">${escapeHtml(l.city)}</span>
+                        <span class="rounded bg-slate-900 px-1.5 py-0.5 font-mono text-slate-300 ring-1 ring-slate-800">${escapeHtml(l.cms)}</span>
+                        <span class="rounded bg-slate-900 px-1.5 py-0.5 font-mono ${l.ttfb_ms > 1400 ? 'text-rose-300' : 'text-slate-400'} ring-1 ring-slate-800">${l.ttfb_ms} ms</span>
+                      </div>
+                    </td>
+                    <td class="px-3 py-3.5 text-center align-top">
+                      <span class="inline-block rounded-lg px-2.5 py-1 font-mono text-sm font-bold ${scoreBadgeClass(l.lead_score)}">${l.lead_score}</span>
+                    </td>
+                    <td class="max-w-[360px] px-3 py-3.5 align-top">
+                      <div class="flex flex-wrap gap-1.5">
+                        ${(l.signals || []).slice(0, 4).map((s) => `
+                          <span class="rounded bg-slate-900 px-2 py-0.5 text-[11px] text-slate-200 ring-1 ring-slate-800">${escapeHtml(s.label)}</span>
+                        `).join('') || '<span class="text-slate-500">Brak krytycznych błędów</span>'}
+                      </div>
+                    </td>
+                    <td class="px-3 py-3.5 align-top font-mono text-[11px]">
+                      ${l.nip ? `<div class="text-emerald-300">NIP: ${escapeHtml(l.nip)}</div>` : '<div class="text-slate-500">NIP: brak</div>'}
+                      ${(l.emails || []).length ? `<div class="mt-0.5 text-slate-200">${escapeHtml(l.emails[0])}</div>` : '<div class="mt-0.5 text-slate-500">E-mail: brak</div>'}
+                      ${(l.phones || []).length ? `<div class="mt-0.5 text-slate-400">${escapeHtml(l.phones[0])}</div>` : ''}
+                    </td>
+                    <td class="px-4 py-3.5 text-right align-top">
+                      <div class="font-mono text-sm font-semibold text-sky-300">~${formatPLN(l.estimated_agency_contract_pln)}</div>
+                      <div class="mt-0.5 text-[11px] text-slate-400">${escapeHtml(l.buyer_persona)}</div>
+                      ${unlocked ? `<button type="button" data-copy-ice="${idx}" class="btn-unlocked-copy mt-2 rounded bg-slate-800 px-2.5 py-1 text-[11px] font-medium text-emerald-300 ring-1 ring-slate-700 hover:bg-slate-700">Kopiuj Icebreaker</button>` : ''}
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      `;
+    }
+
+    async function boot() {
+      const route = parseRoute();
+      const root = $('app-root');
+
+      if (!route.packId) {
+        root.innerHTML = '<div class="surface-card rounded-2xl p-10 text-center text-rose-300">Nieprawidłowy adres paczki.</div>';
+        return;
+      }
+
+      // Check unlocked /success flow first
+      if (route.isSuccess && route.sessionId) {
+        const res = await fetch(`/api/packs/${encodeURIComponent(route.packId)}/verify?session_id=${encodeURIComponent(route.sessionId)}`);
+        const data = await res.json();
+        if (!res.ok) {
+          root.innerHTML = `
+            <div class="surface-card rounded-2xl p-10 text-center">
+              <h1 class="text-lg font-semibold text-rose-300">Nie udało się zweryfikować płatności</h1>
+              <p class="mt-2 text-xs text-slate-400">${escapeHtml(data.detail || 'Sesja płatności nie została jeszcze potwierdzona.')}</p>
+              <a href="/pack/${encodeURIComponent(route.packId)}" class="mt-5 inline-block rounded-lg bg-slate-800 px-4 py-2 text-xs font-semibold text-slate-100">Wróć do strony paczki</a>
+            </div>`;
+          return;
+        }
+
+        const p = data.pack;
+        const token = p.download_token;
+        const leads = p.full_leads || [];
+        const csvUrl = `/api/packs/${encodeURIComponent(p.pack_id)}/download/csv?token=${encodeURIComponent(token)}`;
+        const jsonUrl = `/api/packs/${encodeURIComponent(p.pack_id)}/download/json?token=${encodeURIComponent(token)}`;
+
+        root.innerHTML = `
+          <section class="rounded-2xl border border-emerald-500/35 bg-emerald-500/10 p-6">
+            <div class="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <span class="rounded bg-emerald-500/20 px-2.5 py-1 font-mono text-[11px] font-semibold text-emerald-300">
+                  ✓ PŁATNOŚĆ POTWIERDZONA · WYŁĄCZNOŚĆ ZABLOKOWANA
+                </span>
+                <h1 class="mt-3 text-xl font-bold text-slate-50">${escapeHtml(p.title)}</h1>
+                <p class="mt-1 text-xs text-emerald-200/90">
+                  Ta paczka została trwale wycofana ze sprzedaży dla innych agencji. Pełne dane (${p.lead_count} firm) są gotowe do pobrania.
+                </p>
+              </div>
+              <div class="flex flex-wrap gap-2.5">
+                <a href="${csvUrl}" class="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-5 py-3 text-xs font-bold text-slate-950 transition hover:bg-emerald-400">
+                  Pobierz Pełne CSV (Excel) ↓
+                </a>
+                <a href="${jsonUrl}" class="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-xs font-semibold text-slate-100 ring-1 ring-slate-700 hover:bg-slate-800">
+                  Pobierz JSON ↓
+                </a>
+                ${p.stripe_invoice_url ? `<a href="${escapeHtml(p.stripe_invoice_url)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-xs font-semibold text-sky-300 ring-1 ring-slate-700 hover:bg-slate-800">Dokument PDF (Stripe) ↗</a>` : ''}
+              </div>
+            </div>
+
+            <div class="mt-5 grid grid-cols-1 gap-3 rounded-xl bg-slate-950/60 p-4 font-mono text-[11px] text-slate-300 sm:grid-cols-4">
+              <div><span class="text-slate-500">Nabywca:</span> ${escapeHtml(p.buyer_name || '—')}</div>
+              <div><span class="text-slate-500">NIP:</span> ${escapeHtml(p.buyer_nip || 'nie podano')}</div>
+              <div><span class="text-slate-500">E-mail:</span> ${escapeHtml(p.buyer_email || '—')}</div>
+              <div><span class="text-slate-500">Kwota (bez VAT):</span> <span class="text-emerald-300">${formatPLN(p.final_price_pln)}</span> (${escapeHtml((p.payment_method || 'blik').toUpperCase())})</div>
+            </div>
+          </section>
+
+          ${renderLeadsTable(leads, true)}
+        `;
+
+        document.querySelectorAll('.btn-unlocked-copy').forEach((btn) => {
+          btn.addEventListener('click', async () => {
+            const lead = leads[Number(btn.dataset.copyIce)];
+            if (lead) {
+              await navigator.clipboard.writeText(lead.icebreaker || '');
+              showToast(`Skopiowano Icebreaker dla ${lead.company_name}`);
+            }
+          });
+        });
+        return;
+      }
+
+      // Standard public teaser/sales view
+      const res = await fetch(`/api/packs/${encodeURIComponent(route.packId)}/public`);
+      const data = await res.json();
+      if (!res.ok) {
+        root.innerHTML = `<div class="surface-card rounded-2xl p-12 text-center text-rose-300">${escapeHtml(data.detail || 'Nie znaleziono paczki.')}</div>`;
+        return;
+      }
+
+      const p = data.pack;
+      const stripeLive = Boolean(data.stripe_live);
+      const badge = $('billing-mode-badge');
+      badge.classList.remove('hidden');
+      if (stripeLive) {
+        badge.textContent = 'Stripe Checkout · PLN';
+        badge.className = 'rounded-md bg-slate-800 px-2.5 py-1 font-mono text-[11px] text-slate-300 ring-1 ring-slate-700';
+      } else {
+        badge.textContent = 'Tryb Testowy (Sandbox)';
+        badge.className = 'rounded-md bg-amber-500/15 px-2.5 py-1 font-mono text-[11px] text-amber-300 ring-1 ring-amber-500/30';
+      }
+
+      const isSold = p.status === 'sold';
+      const isReserved = p.status === 'reserved';
+      const hasDiscount = p.regular_value_pln > p.final_price_pln;
+
+      let ctaBlock = '';
+      if (isSold) {
+        ctaBlock = `
+          <div class="rounded-xl border border-rose-500/35 bg-rose-500/10 p-5 text-center">
+            <div class="text-sm font-semibold text-rose-200">Ta paczka została już wykupiona na wyłączność</div>
+            <p class="mt-1 text-xs text-rose-200/75">
+              Każdą paczkę SignalLead PL sprzedajemy tylko 1 agencji, żeby nie wysyłać tych samych firm do konkurencji.
+            </p>
+          </div>`;
+      } else if (isReserved) {
+        ctaBlock = `
+          <div class="rounded-xl border border-amber-500/35 bg-amber-500/10 p-5 text-center">
+            <div class="text-sm font-semibold text-amber-200">Paczka jest właśnie w trakcie rezerwacji</div>
+            <p class="mt-1 text-xs text-amber-200/80">
+              Inna agencja rozpoczęła płatność. Jeśli transakcja nie zostanie sfinalizowana w ciągu 20 minut, paczka wróci do sprzedaży.
+            </p>
+          </div>`;
+      } else {
+        ctaBlock = `
+          <div class="space-y-3">
+            <button id="btn-buy-pack" type="button" class="w-full rounded-xl bg-emerald-500 px-6 py-3.5 text-sm font-bold text-slate-950 shadow-lg transition hover:bg-emerald-400 active:scale-[0.99]">
+              Kup na wyłączność — ${formatPLN(p.final_price_pln)} (BLIK · Karta · P24)
+            </button>
+            <div class="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
+              <span>Cena końcowa (bez VAT) · Zbieramy NIP do rachunku/faktury</span>
+              <a href="/api/packs/${encodeURIComponent(p.pack_id)}/demo.csv" class="font-medium text-amber-300 hover:underline">
+                Pobierz darmowe Demo CSV ↓
+              </a>
+            </div>
+          </div>`;
+      }
+
+      root.innerHTML = `
+        ${route.canceled ? '<div class="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-200">Płatność została anulowana — paczka jest ponownie dostępna, jeśli chcesz dokończyć zakup.</div>' : ''}
+
+        <section class="surface-card rounded-2xl p-6 sm:p-8">
+          <div class="grid grid-cols-1 gap-8 lg:grid-cols-12">
+            <div class="space-y-4 lg:col-span-7">
+              <div class="flex flex-wrap items-center gap-2 text-[11px]">
+                <span class="rounded bg-slate-800 px-2.5 py-1 font-medium text-slate-200">${escapeHtml(p.city)}</span>
+                <span class="rounded bg-slate-800 px-2.5 py-1 font-medium text-slate-200">${escapeHtml(p.industry)}</span>
+                <span class="rounded bg-emerald-500/15 px-2.5 py-1 font-mono text-emerald-300 ring-1 ring-emerald-500/25">1 szt. · Na wyłączność</span>
+              </div>
+              <h1 class="text-2xl font-bold tracking-tight text-slate-50 sm:text-3xl">${escapeHtml(p.title)}</h1>
+              <p class="text-sm leading-relaxed text-slate-300">
+                ${escapeHtml(p.description || 'Zweryfikowana na żywo paczka polskich firm B2B z konkretnymi, kosztownymi lukami technicznymi, SEO lub analitycznymi (GA4 / GTM / Meta Pixel). Po opłaceniu natychmiast pobierasz pełne CSV/JSON z odkrytymi domenami, NIP-ami, e-mailami i gotowymi Icebreakerami.')}
+              </p>
+
+              <div class="grid grid-cols-2 gap-3 pt-2 sm:grid-cols-4">
+                <div class="rounded-xl bg-slate-900/80 p-3.5 ring-1 ring-slate-800">
+                  <div class="text-[10px] uppercase tracking-wider text-slate-400">Liczba firm</div>
+                  <div class="mt-1 font-mono text-lg font-bold text-slate-100">${p.lead_count}</div>
+                </div>
+                <div class="rounded-xl bg-slate-900/80 p-3.5 ring-1 ring-slate-800">
+                  <div class="text-[10px] uppercase tracking-wider text-slate-400">Gorące (75+)</div>
+                  <div class="mt-1 font-mono text-lg font-bold text-rose-400">${p.hot_count}</div>
+                </div>
+                <div class="rounded-xl bg-slate-900/80 p-3.5 ring-1 ring-slate-800">
+                  <div class="text-[10px] uppercase tracking-wider text-slate-400">Z NIP / E-mail</div>
+                  <div class="mt-1 font-mono text-lg font-bold text-emerald-300">${p.with_nip_count} / ${p.with_email_count}</div>
+                </div>
+                <div class="rounded-xl bg-slate-900/80 p-3.5 ring-1 ring-slate-800">
+                  <div class="text-[10px] uppercase tracking-wider text-sky-400">Pipeline agencji</div>
+                  <div class="mt-1 font-mono text-lg font-bold text-sky-300">${formatPLN(p.pipeline_pln)}</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex flex-col justify-between rounded-2xl border border-slate-800 bg-slate-950/75 p-6 lg:col-span-5">
+              <div>
+                <div class="flex items-baseline justify-between">
+                  <span class="text-xs font-medium uppercase tracking-wider text-slate-400">Cena paczki (PLN, bez VAT)</span>
+                  ${hasDiscount ? `<span class="font-mono text-xs text-slate-500 line-through">${formatPLN(p.regular_value_pln)}</span>` : ''}
+                </div>
+                <div class="mt-2 flex items-baseline gap-2">
+                  <span class="font-mono text-3xl font-bold text-slate-50">${formatPLN(p.final_price_pln)}</span>
+                  <span class="text-xs text-emerald-400">jednorazowo</span>
+                </div>
+
+                <ul class="mt-4 space-y-2 text-xs text-slate-300">
+                  <li>✓ Natychmiastowe pobranie pełnego pliku CSV (Excel) i JSON</li>
+                  <li>✓ Odkryte domeny, walidowane NIP-y, e-maile B2B i telefony</li>
+                  <li>✓ Gotowy spersonalizowany Icebreaker pod każdą firmę</li>
+                  <li>✓ Wyłączność 1:1 — po zakupie paczka znika ze sprzedaży</li>
+                </ul>
+              </div>
+
+              <div class="mt-6">
+                ${ctaBlock}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        ${renderLeadsTable(p.teaser_leads || [], false)}
+      `;
+
+      const buyBtn = $('btn-buy-pack');
+      if (buyBtn) {
+        buyBtn.addEventListener('click', async () => {
+          if (!stripeLive) {
+            $('sandbox-modal').classList.remove('hidden');
+            $('sandbox-modal').classList.add('flex');
+            return;
+          }
+          buyBtn.disabled = true;
+          buyBtn.textContent = 'Przekierowuję do Stripe Checkout (BLIK / Karta / P24)...';
+          try {
+            const cRes = await fetch(`/api/packs/${encodeURIComponent(p.pack_id)}/checkout`, { method: 'POST' });
+            const cData = await cRes.json();
+            if (!cRes.ok) throw new Error(cData.detail || 'Błąd tworzenia płatności');
+            window.location.href = cData.checkout_url;
+          } catch (err) {
+            alert(err.message);
+            buyBtn.disabled = false;
+            buyBtn.textContent = `Kup na wyłączność — ${formatPLN(p.final_price_pln)} (BLIK · Karta · P24)`;
+          }
+        });
+      }
+
+      // Sandbox modal bindings
+      const closeSandbox = () => {
+        $('sandbox-modal').classList.add('hidden');
+        $('sandbox-modal').classList.remove('flex');
+      };
+      $('btn-close-sandbox').onclick = closeSandbox;
+      $('btn-cancel-sandbox').onclick = closeSandbox;
+      $('sandbox-form').onsubmit = async (e) => {
+        e.preventDefault();
+        const errBox = $('sb-error');
+        errBox.classList.add('hidden');
+        const subBtn = $('btn-submit-sandbox');
+        subBtn.disabled = true;
+        subBtn.textContent = 'Przetwarzam płatność...';
+        try {
+          const sRes = await fetch(`/api/packs/${encodeURIComponent(p.pack_id)}/simulate-checkout`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              buyer_name: $('sb-name').value.trim(),
+              buyer_email: $('sb-email').value.trim(),
+              buyer_nip: $('sb-nip').value.trim() || null,
+              buyer_address: $('sb-address').value.trim(),
+              payment_method: $('sb-method').value,
+            }),
+          });
+          const sData = await sRes.json();
+          if (!sRes.ok) throw new Error(sData.detail || 'Błąd symulacji płatności');
+          window.location.href = sData.success_url;
+        } catch (err) {
+          errBox.textContent = err.message;
+          errBox.classList.remove('hidden');
+          subBtn.disabled = false;
+          subBtn.textContent = 'Symuluj opłacenie i odblokuj paczkę';
+        }
+      };
+    }
+
+    boot();
+  </script>
+</body>
+</html>

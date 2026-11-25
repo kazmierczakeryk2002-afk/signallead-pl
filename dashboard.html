@@ -148,6 +148,14 @@
           Buyer Finder (Agencje)
           <span id="tab-buyers-count" class="ml-1.5 rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] text-slate-300">0</span>
         </button>
+        <button
+          id="tab-packs"
+          type="button"
+          class="border-b-2 border-transparent px-4 py-2.5 text-xs font-semibold text-slate-400 transition hover:text-slate-200"
+        >
+          Paczki &amp; Sprzedaż (Stripe)
+          <span id="tab-packs-count" class="ml-1.5 rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] text-slate-300">0</span>
+        </button>
       </nav>
     </div>
   </header>
@@ -328,13 +336,22 @@
           </div>
         </div>
 
-        <button
-          id="btn-refresh"
-          type="button"
-          class="inline-flex items-center gap-1.5 rounded-lg bg-slate-800/90 px-3 py-1.5 text-xs font-medium text-slate-300 ring-1 ring-slate-700/80 transition hover:bg-slate-700"
-        >
-          Odśwież
-        </button>
+        <div class="flex items-center gap-2">
+          <button
+            id="btn-create-pack-from-view"
+            type="button"
+            class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-500"
+          >
+            Utwórz paczkę sprzedażową →
+          </button>
+          <button
+            id="btn-refresh"
+            type="button"
+            class="inline-flex items-center gap-1.5 rounded-lg bg-slate-800/90 px-3 py-1.5 text-xs font-medium text-slate-300 ring-1 ring-slate-700/80 transition hover:bg-slate-700"
+          >
+            Odśwież
+          </button>
+        </div>
       </div>
     </section>
 
@@ -548,6 +565,128 @@
         </div>
       </section>
     </div><!-- /#view-buyers -->
+
+    <!-- ==================== PACK STORE & STRIPE VIEW (STAGE 2 / MODULE 2) ==================== -->
+    <div id="view-packs" class="hidden space-y-6">
+      <!-- Stripe Mode Status Banner -->
+      <div id="stripe-status-banner" class="rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-3 text-xs text-slate-300"></div>
+
+      <!-- Store KPIs -->
+      <section aria-label="Wskaźniki sprzedaży paczek" class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="surface-card rounded-xl p-4">
+          <p class="text-xs font-medium uppercase tracking-wider text-emerald-400">Przychód zrealizowany</p>
+          <div class="mt-2 flex items-baseline justify-between">
+            <span id="pkpi-revenue" class="font-mono text-2xl font-semibold text-emerald-400">0 PLN</span>
+            <span class="text-xs text-slate-400">bez VAT</span>
+          </div>
+        </div>
+        <div class="surface-card rounded-xl p-4">
+          <p class="text-xs font-medium uppercase tracking-wider text-slate-400">Sprzedane (Wyłączność)</p>
+          <div class="mt-2 flex items-baseline justify-between">
+            <span id="pkpi-sold" class="font-mono text-2xl font-semibold text-slate-50">0</span>
+            <span id="pkpi-reserved" class="text-xs text-amber-300">0 w rezerwacji</span>
+          </div>
+        </div>
+        <div class="surface-card rounded-xl p-4">
+          <p class="text-xs font-medium uppercase tracking-wider text-slate-400">Aktywne paczki</p>
+          <div class="mt-2 flex items-baseline justify-between">
+            <span id="pkpi-available" class="font-mono text-2xl font-semibold text-sky-300">0</span>
+            <span id="pkpi-inventory" class="font-mono text-xs text-slate-400">0 PLN</span>
+          </div>
+        </div>
+        <div class="surface-card rounded-xl p-4">
+          <p class="text-xs font-medium uppercase tracking-wider text-slate-400">Pipeline otwartych paczek</p>
+          <div class="mt-2 flex items-baseline justify-between">
+            <span id="pkpi-pipeline" class="font-mono text-2xl font-semibold text-slate-50">0 PLN</span>
+            <span class="text-xs text-slate-400">Dla agencji</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Pack Creator Form -->
+      <section class="surface-card rounded-xl p-5">
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 class="text-sm font-semibold text-slate-100">Utwórz paczkę sprzedażową na wyłączność (/pack/id)</h2>
+            <p class="text-xs text-slate-400">Zamraża wybrane leady, wylicza sugerowaną cenę (-25%) i pozwala ręcznie skorygować cenę końcową w PLN (bez VAT).</p>
+          </div>
+          <span class="rounded bg-slate-800 px-2.5 py-0.5 font-mono text-[11px] text-emerald-300">BLIK · Karta · Przelewy24 · NIP</span>
+        </div>
+
+        <form id="pack-create-form" class="space-y-3.5">
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-12">
+            <div class="sm:col-span-3">
+              <label for="pack-city" class="mb-1 block text-[11px] font-medium text-slate-400">Miasto</label>
+              <select id="pack-city" class="w-full rounded-lg border border-slate-700/80 bg-slate-950/70 px-3 py-2 text-xs text-slate-200"></select>
+            </div>
+            <div class="sm:col-span-4">
+              <label for="pack-industry" class="mb-1 block text-[11px] font-medium text-slate-400">Branża B2B</label>
+              <select id="pack-industry" class="w-full rounded-lg border border-slate-700/80 bg-slate-950/70 px-3 py-2 text-xs text-slate-200"></select>
+            </div>
+            <div class="sm:col-span-2">
+              <label for="pack-min-score" class="mb-1 block text-[11px] font-medium text-slate-400">Min. Score</label>
+              <select id="pack-min-score" class="w-full rounded-lg border border-slate-700/80 bg-slate-950/70 px-3 py-2 text-xs text-slate-200">
+                <option value="0">Wszystkie (0+)</option>
+                <option value="40">40+ pkt</option>
+                <option value="55">55+ Ciepłe</option>
+                <option value="75">75+ Gorące</option>
+              </select>
+            </div>
+            <div class="sm:col-span-3">
+              <label for="pack-buyer-domain" class="mb-1 block text-[11px] font-medium text-slate-400">Dedykowana agencja (opcj.)</label>
+              <select id="pack-buyer-domain" class="w-full rounded-lg border border-slate-700/80 bg-slate-950/70 px-3 py-2 text-xs text-slate-200">
+                <option value="">Dowolna agencja (open link)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-12">
+            <div class="sm:col-span-6">
+              <label for="pack-title" class="mb-1 block text-[11px] font-medium text-slate-400">Tytuł paczki (opcjonalny — wygeneruje się automatycznie)</label>
+              <input id="pack-title" type="text" placeholder="np. Kraków — Kliniki Stomatologiczne z brakami GA4/Pixel" class="w-full rounded-lg border border-slate-700/80 bg-slate-950/70 px-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:border-emerald-500 focus:outline-none" />
+            </div>
+            <div class="sm:col-span-3">
+              <label for="pack-custom-price" class="mb-1 block text-[11px] font-medium text-slate-400">Cena końcowa PLN (opcj. korekta)</label>
+              <input id="pack-custom-price" type="number" min="10" step="1" placeholder="Auto (-25% z silnika)" class="w-full rounded-lg border border-slate-700/80 bg-slate-950/70 px-3 py-2 font-mono text-xs text-emerald-300 placeholder-slate-500 focus:border-emerald-500 focus:outline-none" />
+            </div>
+            <div class="flex items-end sm:col-span-3">
+              <button id="btn-create-pack" type="submit" class="w-full rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-50">
+                Utwórz paczkę i wygeneruj link
+              </button>
+            </div>
+          </div>
+          <div id="pack-create-preview" class="text-xs text-slate-400"></div>
+        </form>
+      </section>
+
+      <!-- Packs Table -->
+      <section class="surface-card overflow-hidden rounded-xl">
+        <div class="flex items-center justify-between border-b border-slate-800 px-4 py-3">
+          <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-300">Paczki sprzedażowe &amp; dane do faktur (NIP)</h3>
+          <button id="btn-refresh-packs" type="button" class="rounded-lg bg-slate-800/90 px-3 py-1 text-xs font-medium text-slate-300 ring-1 ring-slate-700 hover:bg-slate-700">Odśwież</button>
+        </div>
+        <div class="custom-scroll overflow-x-auto">
+          <table class="w-full min-w-[1060px] border-collapse text-left text-xs">
+            <thead>
+              <tr class="border-b border-slate-800 bg-slate-900/70 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                <th class="px-4 py-3">Paczka &amp; Publiczny Link</th>
+                <th class="px-3 py-3">Zawartość &amp; Pipeline</th>
+                <th class="px-3 py-3">Cena (PLN, bez VAT)</th>
+                <th class="px-3 py-3">Status &amp; Nabywca (Dane do faktury)</th>
+                <th class="px-4 py-3 text-right">Akcje</th>
+              </tr>
+            </thead>
+            <tbody id="packs-tbody" class="divide-y divide-slate-800/70">
+              <tr>
+                <td colspan="5" class="px-4 py-12 text-center text-sm text-slate-400">
+                  Ładowanie paczek sprzedażowych...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div><!-- /#view-packs -->
   </main>
 
   <!-- Mini-Audit Detail Modal -->
@@ -733,6 +872,10 @@
         opt.textContent = label;
         statusSel.appendChild(opt);
       });
+
+      // Pack Store dropdowns
+      fillSelect($('pack-city'), data.cities, true, 'Wszystkie miasta');
+      fillSelect($('pack-industry'), data.industries, true, 'Wszystkie branże');
     }
 
     async function fetchLeads() {
@@ -1146,22 +1289,29 @@
 
     function switchTab(tab) {
       state.activeTab = tab;
-      const isLeads = tab === 'leads';
-      $('view-leads').classList.toggle('hidden', !isLeads);
-      $('view-buyers').classList.toggle('hidden', isLeads);
+      const views = { leads: 'view-leads', buyers: 'view-buyers', packs: 'view-packs' };
+      const tabs = { leads: 'tab-leads', buyers: 'tab-buyers', packs: 'tab-packs' };
 
-      $('tab-leads').className = isLeads
-        ? 'border-b-2 border-emerald-400 px-4 py-2.5 text-xs font-semibold text-slate-100 transition'
-        : 'border-b-2 border-transparent px-4 py-2.5 text-xs font-semibold text-slate-400 transition hover:text-slate-200';
-      $('tab-buyers').className = !isLeads
-        ? 'border-b-2 border-emerald-400 px-4 py-2.5 text-xs font-semibold text-slate-100 transition'
-        : 'border-b-2 border-transparent px-4 py-2.5 text-xs font-semibold text-slate-400 transition hover:text-slate-200';
+      Object.entries(views).forEach(([k, id]) => {
+        $(id).classList.toggle('hidden', k !== tab);
+      });
+      Object.entries(tabs).forEach(([k, id]) => {
+        $(id).className = k === tab
+          ? 'border-b-2 border-emerald-400 px-4 py-2.5 text-xs font-semibold text-slate-100 transition'
+          : 'border-b-2 border-transparent px-4 py-2.5 text-xs font-semibold text-slate-400 transition hover:text-slate-200';
+      });
 
-      if (!isLeads) fetchBuyers();
+      if (tab === 'buyers') fetchBuyers();
+      if (tab === 'packs') {
+        syncPackBuyerSelect();
+        fetchPacks();
+        updatePackPricePreview();
+      }
     }
 
     $('tab-leads').addEventListener('click', () => switchTab('leads'));
     $('tab-buyers').addEventListener('click', () => switchTab('buyers'));
+    $('tab-packs').addEventListener('click', () => switchTab('packs'));
 
     async function fetchBuyers() {
       const params = new URLSearchParams();
@@ -1547,12 +1697,246 @@
       window.location.href = `/api/buyers/export/csv?${params.toString()}`;
     });
 
+    // ==================== PACK STORE & STRIPE (STAGE 2 / MODULE 2) ====================
+
+    function syncPackBuyerSelect() {
+      const sel = $('pack-buyer-domain');
+      const prev = sel.value;
+      sel.innerHTML = '<option value="">Dowolna agencja (open link)</option>';
+      (state.buyers || []).forEach((b) => {
+        const opt = document.createElement('option');
+        opt.value = b.domain;
+        opt.textContent = `${b.agency_name} (${b.city})`;
+        sel.appendChild(opt);
+      });
+      if (prev) sel.value = prev;
+    }
+
+    async function updatePackPricePreview() {
+      const city = $('pack-city').value;
+      const industry = $('pack-industry').value;
+      const minScore = $('pack-min-score').value;
+      const params = new URLSearchParams({ min_score: String(minScore), teaser: 'false' });
+      if (city && city !== 'Wszystkie') params.set('city', city);
+      if (industry && industry !== 'Wszystkie') params.set('industry', industry);
+      try {
+        const res = await fetch(`/api/leads?${params.toString()}`);
+        const data = await res.json();
+        const k = data.kpis || {};
+        if (!k.total_leads) {
+          $('pack-create-preview').innerHTML = '<span class="text-amber-300">Brak leadów dla wybranych filtrów — zmień filtry lub uruchom Harvester.</span>';
+        } else {
+          $('pack-create-preview').innerHTML = `Podgląd filtrów: <strong class="text-slate-200">${k.total_leads} firm</strong> (gorące 75+: ${k.hot_leads_75_plus}) · Pipeline: <span class="font-mono text-sky-300">${formatPLN(k.total_contract_pipeline_pln)}</span> · Sugerowana cena pakietowa (-25%): <span class="font-mono font-semibold text-emerald-400">${formatPLN(k.bundle_price_pln)}</span> (zamiast ${formatPLN(k.pack_value_pln)}).`;
+        }
+      } catch {
+        $('pack-create-preview').textContent = '';
+      }
+    }
+
+    ['pack-city', 'pack-industry', 'pack-min-score'].forEach((id) => {
+      $(id).addEventListener('change', updatePackPricePreview);
+    });
+
+    $('btn-create-pack-from-view').addEventListener('click', () => {
+      $('pack-city').value = state.city || 'Wszystkie';
+      $('pack-industry').value = 'Wszystkie';
+      $('pack-min-score').value = String(state.minScore || 0);
+      $('pack-custom-price').value = '';
+      $('pack-title').value = '';
+      switchTab('packs');
+    });
+
+    async function fetchPacks() {
+      const res = await fetch('/api/packs');
+      const data = await res.json();
+      const packs = data.packs || [];
+      const kpis = data.kpis || {};
+      const stripeLive = Boolean(data.stripe_live);
+
+      $('tab-packs-count').textContent = kpis.total_packs ?? 0;
+      $('pkpi-revenue').textContent = formatPLN(kpis.realized_revenue_pln ?? 0);
+      $('pkpi-sold').textContent = kpis.sold_packs ?? 0;
+      $('pkpi-reserved').textContent = `${kpis.reserved_packs ?? 0} w rezerwacji`;
+      $('pkpi-available').textContent = kpis.available_packs ?? 0;
+      $('pkpi-inventory').textContent = formatPLN(kpis.open_inventory_pln ?? 0);
+      $('pkpi-pipeline').textContent = formatPLN(kpis.total_pipeline_pln ?? 0);
+
+      const banner = $('stripe-status-banner');
+      if (stripeLive) {
+        banner.className = 'rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-200';
+        banner.innerHTML = '<strong>Stripe Checkout LIVE aktywny:</strong> płatności BLIK, Karta i Przelewy24 (PLN, bez VAT) + automatyczne zbieranie NIP i webhooki działają produkcyjnie.';
+      } else {
+        banner.className = 'rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-200';
+        banner.innerHTML = '<strong>Tryb Testowy (Sandbox):</strong> zmienna <code class="font-mono text-amber-100">STRIPE_SECRET_KEY</code> nie jest jeszcze ustawiona. Możesz już teraz otwierać strony <code class="font-mono text-amber-100">/pack/{id}</code> i testować pełny zakup BLIK + NIP + odblokowanie CSV.';
+      }
+
+      renderPacksTable(packs);
+    }
+
+    function packStatusPill(status, label) {
+      if (status === 'sold') return `<span class="rounded bg-emerald-500/15 px-2 py-0.5 font-mono text-[11px] font-semibold text-emerald-300 ring-1 ring-emerald-500/30">${escapeHtml(label)}</span>`;
+      if (status === 'reserved') return `<span class="rounded bg-amber-500/15 px-2 py-0.5 font-mono text-[11px] font-semibold text-amber-300 ring-1 ring-amber-500/30">${escapeHtml(label)}</span>`;
+      return `<span class="rounded bg-sky-500/15 px-2 py-0.5 font-mono text-[11px] font-semibold text-sky-300 ring-1 ring-sky-500/30">${escapeHtml(label)}</span>`;
+    }
+
+    function renderPacksTable(packs) {
+      const tbody = $('packs-tbody');
+      if (!packs.length) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="5" class="px-4 py-12 text-center">
+              <p class="text-sm font-medium text-slate-300">Brak utworzonych paczek sprzedażowych.</p>
+              <p class="mt-1 text-xs text-slate-500">Utwórz pierwszą paczkę powyżej — otrzymasz publiczny link /pack/{id} gotowy do wysłania agencji.</p>
+            </td>
+          </tr>`;
+        return;
+      }
+
+      tbody.innerHTML = packs.map((p) => {
+        const fullUrl = `${window.location.origin}/pack/${p.pack_id}`;
+        const isSold = p.status === 'sold';
+        const isAvail = p.status === 'available';
+
+        const buyerInfo = isSold
+          ? `
+            <div class="mt-2 space-y-0.5 rounded-lg bg-slate-950/70 p-2 font-mono text-[11px] ring-1 ring-slate-800">
+              <div class="text-slate-100">${escapeHtml(p.buyer_name || 'Nabywca')}</div>
+              <div class="text-emerald-300">NIP: ${escapeHtml(p.buyer_nip || 'brak')}</div>
+              <div class="text-slate-400">${escapeHtml(p.buyer_email || '')} · ${escapeHtml((p.payment_method || '').toUpperCase())}</div>
+              ${p.buyer_address ? `<div class="text-slate-500">${escapeHtml(p.buyer_address)}</div>` : ''}
+              ${p.stripe_invoice_url ? `<a href="${escapeHtml(p.stripe_invoice_url)}" target="_blank" class="inline-block text-sky-400 hover:underline">Stripe Invoice PDF ↗</a>` : ''}
+            </div>`
+          : (p.buyer_domain ? `<div class="mt-1 text-[11px] text-slate-400">Dla agencji: <span class="font-mono text-slate-300">${escapeHtml(p.buyer_domain)}</span></div>` : '');
+
+        return `
+          <tr class="table-row-hover transition-colors">
+            <td class="px-4 py-3.5 align-top">
+              <div class="font-semibold text-slate-100">${escapeHtml(p.title)}</div>
+              <div class="mt-1 flex flex-wrap items-center gap-2 font-mono text-[11px]">
+                <a href="${escapeHtml(p.public_url)}" target="_blank" rel="noopener noreferrer" class="text-emerald-400 hover:underline">${escapeHtml(p.public_url)} ↗</a>
+                <button type="button" data-copy-pack-url="${escapeHtml(fullUrl)}" class="btn-copy-pack-url rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-300 hover:bg-slate-700">Kopiuj link</button>
+              </div>
+              <div class="mt-1 text-[11px] text-slate-500">${escapeHtml(p.city)} · ${escapeHtml(p.industry)}</div>
+            </td>
+
+            <td class="px-3 py-3.5 align-top font-mono">
+              <div class="text-slate-100">${p.lead_count} firm <span class="text-rose-400">(${p.hot_count} gorących)</span></div>
+              <div class="mt-0.5 text-[11px] text-slate-400">${p.with_nip_count} NIP · ${p.with_email_count} e-mail</div>
+              <div class="mt-0.5 text-[11px] text-sky-300">Pipeline ~${formatPLN(p.pipeline_pln)}</div>
+            </td>
+
+            <td class="px-3 py-3.5 align-top font-mono">
+              <div class="text-sm font-bold text-emerald-400">${formatPLN(p.final_price_pln)}</div>
+              <div class="text-[10px] text-slate-500">Sugerowana: ${formatPLN(p.suggested_price_pln)}</div>
+              ${isAvail ? `<button type="button" data-edit-price-id="${escapeHtml(p.pack_id)}" data-current-price="${p.final_price_pln}" class="btn-edit-pack-price mt-1.5 text-[11px] text-sky-400 hover:underline">Zmień cenę</button>` : ''}
+            </td>
+
+            <td class="px-3 py-3.5 align-top">
+              ${packStatusPill(p.status, p.status_label)}
+              ${buyerInfo}
+            </td>
+
+            <td class="px-4 py-3.5 text-right align-top">
+              <div class="inline-flex flex-col items-end gap-1.5">
+                <a href="${escapeHtml(p.public_url)}" target="_blank" rel="noopener noreferrer" class="rounded-lg bg-slate-800 px-3 py-1.5 text-[11px] font-semibold text-slate-100 ring-1 ring-slate-700 hover:bg-slate-700">
+                  Otwórz stronę /pack ↗
+                </a>
+                ${isSold && p.download_token
+                  ? `<a href="/api/packs/${encodeURIComponent(p.pack_id)}/download/csv?token=${encodeURIComponent(p.download_token)}" class="text-[11px] font-medium text-emerald-400 hover:underline">Pobierz pełne CSV ↓</a>`
+                  : `<a href="/api/packs/${encodeURIComponent(p.pack_id)}/demo.csv" class="text-[11px] font-medium text-amber-300 hover:underline">Pobierz Demo CSV ↓</a>`}
+                ${!isSold ? `<button type="button" data-del-pack="${escapeHtml(p.pack_id)}" class="btn-del-pack text-[11px] text-rose-400/80 hover:text-rose-300">Usuń paczkę</button>` : ''}
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      document.querySelectorAll('.btn-copy-pack-url').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          await navigator.clipboard.writeText(btn.dataset.copyPackUrl);
+          showToast('Skopiowano publiczny link sprzedażowy paczki!');
+        });
+      });
+
+      document.querySelectorAll('.btn-edit-pack-price').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const packId = btn.dataset.editPriceId;
+          const current = btn.dataset.currentPrice;
+          const next = prompt(`Nowa cena paczki ${packId} (PLN, bez VAT):`, current);
+          if (!next) return;
+          const parsed = Number(next);
+          if (!Number.isFinite(parsed) || parsed < 10) {
+            showToast('Podaj poprawną kwotę (min. 10 PLN).', true);
+            return;
+          }
+          const res = await fetch(`/api/packs/${encodeURIComponent(packId)}/price`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ final_price_pln: Math.round(parsed) }),
+          });
+          const d = await res.json();
+          if (!res.ok) return showToast(d.detail || 'Błąd zmiany ceny', true);
+          showToast(`Zaktualizowano cenę paczki na ${formatPLN(d.pack.final_price_pln)}`);
+          fetchPacks();
+        });
+      });
+
+      document.querySelectorAll('.btn-del-pack').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const packId = btn.dataset.delPack;
+          if (!confirm(`Usunąć niesprzedaną paczkę ${packId}?`)) return;
+          const res = await fetch(`/api/packs/${encodeURIComponent(packId)}`, { method: 'DELETE' });
+          if (!res.ok) {
+            const d = await res.json();
+            return showToast(d.detail || 'Nie udało się usunąć', true);
+          }
+          showToast('Usunięto paczkę.');
+          fetchPacks();
+        });
+      });
+    }
+
+    $('pack-create-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = $('btn-create-pack');
+      btn.disabled = true;
+      btn.textContent = 'Tworzę paczkę...';
+      try {
+        const customRaw = $('pack-custom-price').value.trim();
+        const res = await fetch('/api/packs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: $('pack-title').value.trim() || null,
+            city: $('pack-city').value,
+            industry: $('pack-industry').value,
+            min_score: Number($('pack-min-score').value),
+            custom_price_pln: customRaw ? Math.round(Number(customRaw)) : null,
+            buyer_domain: $('pack-buyer-domain').value || null,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Nie udało się utworzyć paczki');
+        $('pack-title').value = '';
+        $('pack-custom-price').value = '';
+        showToast(`Utworzono paczkę ${data.pack.pack_id} (${formatPLN(data.pack.final_price_pln)})!`);
+        await fetchPacks();
+      } catch (err) {
+        showToast(err.message, true);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Utwórz paczkę i wygeneruj link';
+      }
+    });
+
+    $('btn-refresh-packs').addEventListener('click', fetchPacks);
+
     // Boot
     (async function init() {
       updateModeUI();
       updateScorePills();
       await loadMeta();
-      await Promise.all([fetchLeads(), fetchBuyers()]);
+      await Promise.all([fetchLeads(), fetchBuyers(), fetchPacks()]);
     })();
   </script>
 </body>
