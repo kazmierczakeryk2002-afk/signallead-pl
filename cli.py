@@ -1,0 +1,210 @@
+#!/usr/bin/env python3
+"""
+SignalLead PL — Batch CLI Tool.
+
+Examples:
+  python cli.py --url https://www.dzp.pl --city Warszawa --industry "Kancelarie Prawne/Podatkowe"
+  python cli.py --harvest --city Kraków --industry "Kliniki Medyczne/Stomatologia" --limit 5
+  python cli.py --list --teaser --export-csv demo_pack.csv
+"""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import json
+import sys
+from pathlib import Path
+from typing import Any
+
+from engine import (
+    CITIES,
+    INDUSTRIES,
+    LeadDatabase,
+    SignalAuditorAgent,
+    mask_lead_for_teaser,
+    run_harvest_and_audit,
+)
+
+
+def print_lead_summary(leads: list[dict[str, Any]], teaser: bool = False) -> None:
+    if not leads:
+        print("Brak leadów do wyświetlenia.")
+        return
+
+    kpis = LeadDatabase.compute_kpis(leads)
+    mode_label = "DEMO / TEASER" if teaser else "PEŁNE DANE"
+
+    print("\n" + "=" * 92)
+    print(f" SignalLead PL  |  Tryb: {mode_label}")
+    print(
+        f" Leady: {kpis['total_leads']}  |  Gorące (75+): {kpis['hot_leads_75_plus']}  |  "
+        f"Wartość paczki: {kpis['pack_value_pln']} PLN  |  "
+        f"Pakiet (-25%): {kpis['bundle_price_pln']} PLN  |  "
+        f"Pipeline: {kpis['total_contract_pipeline_pln']:,} PLN".replace(",", " ")
+    )
+    print("=" * 92)
+
+    for idx, lead in enumerate(leads, 1):
+        emails = ", ".join(lead.get("emails", [])[:2]) or "brak"
+        phones = ", ".join(lead.get("phones", [])[:1]) or "brak"
+        nip = lead.get("nip") or "brak"
+        signals = lead.get("signals", [])
+        top_sig = "; ".join(s["label"] for s in signals[:3]) or "brak krytycznych błędów"
+        print(
+            f"\n[{idx}] {lead['company_name']} ({lead['domain']}) — {lead['city']} | {lead['industry']}"
+        )
+        print(
+            f"    Score: {lead['lead_score']}/99 | Cena: {lead['lead_price_pln']} PLN | "
+            f"Kontrakt: ~{lead['estimated_agency_contract_pln']:,} PLN | Kupiec: {lead['buyer_persona']}".replace(
+                ",", " "
+            )
+        )
+        print(
+            f"    Tech: CMS={lead['cms']} | SSL={'OK' if lead['has_ssl'] else 'BRAK'} | "
+            f"TTFB={lead['ttfb_ms']}ms | HTTP={lead['http_status']}"
+        )
+        print(f"    Kontakt: NIP={nip} | Email={emails} | Tel={phones}")
+        print(f"    Sygnały ({len(signals)}): {top_sig}")
+        print(f"    Icebreaker: {lead['icebreaker']}")
+    print()
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="signallead",
+        description="SignalLead PL — CLI do audytu polskich stron B2B i generowania paczek leadów sygnałowych.",
+    )
+    parser.add_argument("--url", type=str, help="Pojedyncza domena lub URL do audytu na żywo.")
+    parser.add_argument(
+        "--harvest",
+        action="store_true",
+        help="Uruchom HarvesterAgent dla wybranego miasta i branży.",
+    )
+    parser.add_argument(
+        "--list",
+        action="store_true",
+        help="Wyświetl aktualne leady zapisane w bazie SQLite.",
+    )
+    parser.add_argument(
+        "--city",
+        type=str,
+        default="Warszawa",
+        help=f"Miasto docelowe ({', '.join(CITIES.keys())}). Domyślnie: Warszawa.",
+    )
+    parser.add_argument(
+        "--industry",
+        type=str,
+        default=INDUSTRIES[0],
+        help=f"Branża B2B ({', '.join(INDUSTRIES)}). Domyślnie: {INDUSTRIES[0]}.",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=5,
+        help="Liczba firm do pobrania w trybie --harvest (domyślnie: 5).",
+    )
+    parser.add_argument(
+        "--min-score",
+        type=int,
+        default=0,
+        help="Minimalny lead_score przy listowaniu/eksporcie (0-99).",
+    )
+    parser.add_argument(
+        "--teaser",
+        action="store_true",
+        help="Tryb DEMO / TEASER (maskuje nazwy firm, domeny, NIP i kontakty).",
+    )
+    parser.add_argument(
+        "--export-csv",
+        type=str,
+        default=None,
+        help="Ścieżka do pliku wyjściowego CSV (kodowanie UTF-8-SIG dla Excela).",
+    )
+    parser.add_argument(
+        "--db",
+        type=str,
+        default="signallead.db",
+        help="Ścieżka do bazy SQLite (domyślnie: signallead.db).",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Wypisz wynik jako sformatowany JSON zamiast tabeli tekstowej.",
+    )
+    return parser
+
+
+async def async_main(args: argparse.Namespace) -> int:
+    db = LeadDatabase(args.db)
+    results: list[dict[str, Any]] = []
+
+    if args.url:
+        auditor = SignalAuditorAgent()
+        record = await auditor.audit(
+            raw_url=args.url,
+            city=args.city,
+            industry=args.industry,
+        )
+        saved = db.upsert_lead(record)
+        results = [mask_lead_for_teaser(saved) if args.teaser else saved]
+    elif args.harvest:
+        if args.city not in CITIES:
+            print(
+                f"Błąd: nieznane miasto '{args.city}'. Dostępne: {', '.join(CITIES.keys())}",
+                file=sys.stderr,
+            )
+            return 2
+        if args.industry not in INDUSTRIES:
+            print(
+                f"Błąd: nieznana branża '{args.industry}'. Dostępne: {', '.join(INDUSTRIES)}",
+                file=sys.stderr,
+            )
+            return 2
+        audited = await run_harvest_and_audit(
+            city=args.city,
+            industry=args.industry,
+            limit=max(1, args.limit),
+            db=db,
+        )
+        results = [
+            mask_lead_for_teaser(l) if args.teaser else l
+            for l in audited
+            if l["lead_score"] >= args.min_score
+        ]
+    elif args.list or args.export_csv:
+        results = db.list_leads(
+            min_score=args.min_score,
+            teaser=args.teaser,
+        )
+    else:
+        build_parser().print_help()
+        return 0
+
+    if args.export_csv:
+        csv_text = db.export_csv(results, teaser=args.teaser)
+        out_path = Path(args.export_csv)
+        out_path.write_text(csv_text, encoding="utf-8")
+        print(f"Zapisano eksport CSV ({len(results)} leadów) -> {out_path.resolve()}")
+
+    if args.json:
+        payload = {
+            "mode": "teaser" if args.teaser else "full",
+            "kpis": db.compute_kpis(results),
+            "leads": results,
+        }
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        print_lead_summary(results, teaser=args.teaser)
+
+    return 0
+
+
+def main() -> None:
+    parser = build_parser()
+    args = parser.parse_args()
+    raise SystemExit(asyncio.run(async_main(args)))
+
+
+if __name__ == "__main__":
+    main()

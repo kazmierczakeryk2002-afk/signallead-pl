@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="pl" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SignalLead PL — Generator Leadów Sygnałowych B2B</title>
+  <meta name="description" content="Autonomiczny system do wykrywania leadów sygnałowych B2B w Polsce — audyt Web Dev, SEO i Ads, ekstrakcja NIP/kontaktów, tryb Teaser-First i eksport CSV/JSON." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
+          },
+          colors: {
+            canvas: '#090d12',
+            surface: '#10161f',
+            elevated: '#161f2c',
+            hairline: '#222e3e',
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    body {
+      background-color: #090d12;
+      color: #e6edf5;
+      font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    }
+    .surface-card {
+      background: linear-gradient(180deg, rgba(22, 31, 44, 0.72) 0%, rgba(16, 22, 31, 0.94) 100%);
+      border: 1px solid rgba(148, 163, 184, 0.12);
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 10px 30px -15px rgba(0, 0, 0, 0.6);
+    }
+    .table-row-hover:hover {
+      background-color: rgba(30, 41, 59, 0.45);
+    }
+    .custom-scroll::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    .custom-scroll::-webkit-scrollbar-track {
+      background: #0d121a;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: #273447;
+      border-radius: 4px;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb:hover {
+      background: #374963;
+    }
+    @keyframes spinSlow {
+      to { transform: rotate(360deg); }
+    }
+    .spinner {
+      animation: spinSlow 0.8s linear infinite;
+    }
+  </style>
+</head>
+<body class="min-h-screen antialiased selection:bg-emerald-500/20 selection:text-emerald-200">
+  <!-- Top Header -->
+  <header class="sticky top-0 z-30 border-b border-slate-800/80 bg-[#090d12]/90 backdrop-blur-md">
+    <div class="mx-auto flex max-w-[1440px] flex-wrap items-center justify-between gap-4 px-4 py-3.5 sm:px-6 lg:px-8">
+      <div class="flex items-center gap-3.5">
+        <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30">
+          <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center gap-2.5">
+            <h1 class="text-base font-semibold tracking-tight text-slate-100 sm:text-lg">
+              SignalLead PL
+            </h1>
+            <span class="rounded bg-slate-800 px-2 py-0.5 font-mono text-[11px] font-medium text-slate-300 ring-1 ring-slate-700">
+              B2B Trigger Engine
+            </span>
+          </div>
+          <p class="text-xs text-slate-400">
+            Audyt techniczny, SEO &amp; Ads polskich firm · Sprzedaż paczek Teaser-First
+          </p>
+        </div>
+      </div>
+
+      <!-- Mode Switcher: PEŁNE DANE vs DEMO / TEASER -->
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="inline-flex items-center rounded-lg bg-slate-900 p-1 ring-1 ring-slate-800" role="group" aria-label="Tryb prezentacji danych">
+          <button
+            id="btn-mode-full"
+            type="button"
+            class="rounded-md px-3.5 py-1.5 text-xs font-semibold transition-all"
+          >
+            PEŁNE DANE
+          </button>
+          <button
+            id="btn-mode-teaser"
+            type="button"
+            class="rounded-md px-3.5 py-1.5 text-xs font-semibold transition-all"
+          >
+            DEMO / TEASER
+          </button>
+        </div>
+
+        <button
+          id="btn-export-csv"
+          type="button"
+          class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-emerald-500 active:scale-[0.99]"
+        >
+          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V3" />
+          </svg>
+          <span id="csv-btn-label">Eksport CSV (Pełny)</span>
+        </button>
+
+        <button
+          id="btn-export-json"
+          type="button"
+          class="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-3 py-2 text-xs font-medium text-slate-200 ring-1 ring-slate-700 transition hover:bg-slate-700"
+        >
+          JSON
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="mx-auto max-w-[1440px] space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+    <!-- Teaser Mode Info Banner -->
+    <div id="teaser-banner" class="hidden rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2.5">
+          <svg class="h-5 w-5 shrink-0 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+          </svg>
+          <span>
+            <strong class="font-semibold text-amber-100">Tryb DEMO / TEASER aktywny:</strong>
+            Nazwy firm, domeny, NIP, e-maile i telefony są zamaskowane. Paczka jest gotowa do wysłania agencji jako darmowa próbka przed opłaceniem pełnej bazy.
+          </span>
+        </div>
+        <span class="font-mono text-xs text-amber-300" id="teaser-pack-pitch"></span>
+      </div>
+    </div>
+
+    <!-- KPI Strip -->
+    <section aria-label="Kluczowe wskaźniki paczki" class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div class="surface-card rounded-xl p-4">
+        <p class="text-xs font-medium uppercase tracking-wider text-slate-400">Liczba leadów</p>
+        <div class="mt-2 flex items-baseline justify-between">
+          <span id="kpi-total" class="font-mono text-2xl font-semibold text-slate-50">0</span>
+          <span id="kpi-contacts" class="text-xs text-slate-400">0 z NIP · 0 z e-mail</span>
+        </div>
+      </div>
+
+      <div class="surface-card rounded-xl p-4">
+        <p class="text-xs font-medium uppercase tracking-wider text-slate-400">Gorące leady (75+)</p>
+        <div class="mt-2 flex items-baseline justify-between">
+          <span id="kpi-hot" class="font-mono text-2xl font-semibold text-rose-400">0</span>
+          <span id="kpi-avg-score" class="font-mono text-xs text-slate-400">Śr. 0 pkt</span>
+        </div>
+      </div>
+
+      <div class="surface-card rounded-xl p-4">
+        <p class="text-xs font-medium uppercase tracking-wider text-slate-400">Wartość paczki</p>
+        <div class="mt-2 flex items-baseline justify-between">
+          <span id="kpi-pack-value" class="font-mono text-2xl font-semibold text-slate-50">0 PLN</span>
+          <span class="text-xs text-slate-400">59–149 PLN/szt.</span>
+        </div>
+      </div>
+
+      <div class="surface-card rounded-xl p-4">
+        <p class="text-xs font-medium uppercase tracking-wider text-emerald-400/90">Cena pakietowa (-25%)</p>
+        <div class="mt-2 flex items-baseline justify-between">
+          <span id="kpi-bundle-price" class="font-mono text-2xl font-semibold text-emerald-400">0 PLN</span>
+          <span id="kpi-bundle-savings" class="font-mono text-xs text-emerald-300/80">-0 PLN</span>
+        </div>
+      </div>
+
+      <div class="surface-card rounded-xl p-4">
+        <p class="text-xs font-medium uppercase tracking-wider text-sky-400/90">Pipeline dla agencji</p>
+        <div class="mt-2 flex items-baseline justify-between">
+          <span id="kpi-pipeline" class="font-mono text-2xl font-semibold text-sky-300">0 PLN</span>
+          <span class="text-xs text-slate-400">Est. kontrakty</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Action Panels: Single Live Scanner + City Harvester -->
+    <section class="grid grid-cols-1 gap-4 lg:grid-cols-12">
+      <!-- Live Single Domain Scanner -->
+      <div class="surface-card rounded-xl p-5 lg:col-span-5">
+        <div class="mb-3.5 flex items-center justify-between">
+          <div>
+            <h2 class="text-sm font-semibold text-slate-100">Skaner pojedynczej domeny (Live)</h2>
+            <p class="text-xs text-slate-400">Sprawdza stronę główną, /kontakt i /o-nas pod kątem błędów i NIP</p>
+          </div>
+          <span class="rounded bg-slate-800 px-2 py-0.5 font-mono text-[11px] text-slate-300">Agent 2 &amp; 3</span>
+        </div>
+
+        <form id="audit-form" class="space-y-3">
+          <div>
+            <label for="audit-url" class="sr-only">Domena lub URL</label>
+            <input
+              id="audit-url"
+              type="text"
+              required
+              placeholder="np. kancelaria-przyklad.pl lub https://firma.pl"
+              class="w-full rounded-lg border border-slate-700/80 bg-slate-950/70 px-3.5 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            />
+          </div>
+          <div class="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+            <select id="audit-city" class="rounded-lg border border-slate-700/80 bg-slate-950/70 px-3 py-2 text-xs text-slate-200 focus:border-emerald-500 focus:outline-none"></select>
+            <select id="audit-industry" class="rounded-lg border border-slate-700/80 bg-slate-950/70 px-3 py-2 text-xs text-slate-200 focus:border-emerald-500 focus:outline-none sm:col-span-2"></select>
+          </div>
+          <div class="flex items-center justify-between gap-3 pt-1">
+            <span id="audit-status-msg" class="text-xs text-slate-400"></span>
+            <button
+              id="btn-run-audit"
+              type="submit"
+              class="inline-flex shrink-0 items-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-950 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <span>Skanuj na żywo</span>
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- City & Industry Harvester -->
+      <div class="surface-card rounded-xl p-5 lg:col-span-7">
+        <div class="mb-3.5 flex items-center justify-between">
+          <div>
+            <h2 class="text-sm font-semibold text-slate-100">Harvester Miast i Branż (Batch B2B)</h2>
+            <p class="text-xs text-slate-400">OpenStreetMap Overpass API + polska baza domen B2B → automatyczny audyt</p>
+          </div>
+          <span class="rounded bg-slate-800 px-2 py-0.5 font-mono text-[11px] text-slate-300">Agent 1 → 4</span>
+        </div>
+
+        <form id="harvest-form" class="space-y-3">
+          <div class="grid grid-cols-1 gap-2.5 sm:grid-cols-12">
+            <div class="sm:col-span-3">
+              <label for="harvest-city" class="mb-1 block text-[11px] font-medium text-slate-400">Miasto</label>
+              <select id="harvest-city" class="w-full rounded-lg border border-slate-700/80 bg-slate-950/70 px-3 py-2 text-xs text-slate-200 focus:border-emerald-500 focus:outline-none"></select>
+            </div>
+            <div class="sm:col-span-6">
+              <label for="harvest-industry" class="mb-1 block text-[11px] font-medium text-slate-400">Branża B2B</label>
+              <select id="harvest-industry" class="w-full rounded-lg border border-slate-700/80 bg-slate-950/70 px-3 py-2 text-xs text-slate-200 focus:border-emerald-500 focus:outline-none"></select>
+            </div>
+            <div class="sm:col-span-3">
+              <label for="harvest-limit" class="mb-1 block text-[11px] font-medium text-slate-400">Liczba firm</label>
+              <select id="harvest-limit" class="w-full rounded-lg border border-slate-700/80 bg-slate-950/70 px-3 py-2 text-xs text-slate-200 focus:border-emerald-500 focus:outline-none">
+                <option value="3">3 firmy</option>
+                <option value="5" selected>5 firm</option>
+                <option value="8">8 firm</option>
+                <option value="12">12 firm</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap items-center justify-between gap-3 pt-1">
+            <span id="harvest-status-msg" class="text-xs text-slate-400">
+              Gotowy do pobrania i przeskanowania polskich firm z wybranego miasta.
+            </span>
+            <button
+              id="btn-run-harvest"
+              type="submit"
+              class="inline-flex shrink-0 items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <span>Uruchom Harvester</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- Filters Bar -->
+    <section class="surface-card rounded-xl p-4">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex flex-wrap items-center gap-2.5">
+          <div class="relative">
+            <input
+              id="filter-search"
+              type="search"
+              placeholder="Szukaj firmy, domeny, CMS..."
+              class="w-56 rounded-lg border border-slate-700/80 bg-slate-950/70 py-1.5 pl-3 pr-3 text-xs text-slate-100 placeholder-slate-500 focus:border-emerald-500 focus:outline-none"
+            />
+          </div>
+
+          <select id="filter-city" class="rounded-lg border border-slate-700/80 bg-slate-950/70 px-3 py-1.5 text-xs text-slate-200 focus:border-emerald-500 focus:outline-none">
+            <option value="Wszystkie">Wszystkie miasta</option>
+          </select>
+
+          <select id="filter-buyer" class="rounded-lg border border-slate-700/80 bg-slate-950/70 px-3 py-1.5 text-xs text-slate-200 focus:border-emerald-500 focus:outline-none">
+            <option value="Wszystkie">Wszyscy kupcy</option>
+          </select>
+
+          <div class="inline-flex items-center rounded-lg bg-slate-950/70 p-0.5 ring-1 ring-slate-800">
+            <button type="button" data-min-score="0" class="score-pill rounded-md px-2.5 py-1 text-xs font-medium">Wszystkie</button>
+            <button type="button" data-min-score="55" class="score-pill rounded-md px-2.5 py-1 text-xs font-medium">55+ Ciepłe</button>
+            <button type="button" data-min-score="75" class="score-pill rounded-md px-2.5 py-1 text-xs font-medium">75+ Gorące</button>
+          </div>
+        </div>
+
+        <button
+          id="btn-refresh"
+          type="button"
+          class="inline-flex items-center gap-1.5 rounded-lg bg-slate-800/90 px-3 py-1.5 text-xs font-medium text-slate-300 ring-1 ring-slate-700/80 transition hover:bg-slate-700"
+        >
+          Odśwież
+        </button>
+      </div>
+    </section>
+
+    <!-- Leads Table -->
+    <section class="surface-card overflow-hidden rounded-xl">
+      <div class="custom-scroll overflow-x-auto">
+        <table class="w-full min-w-[1080px] border-collapse text-left text-xs">
+          <thead>
+            <tr class="border-b border-slate-800 bg-slate-900/70 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+              <th class="px-4 py-3">Firma &amp; Domena</th>
+              <th class="px-3 py-3 text-center">Score</th>
+              <th class="px-3 py-3">Wykryte sygnały (Web / SEO / Ads)</th>
+              <th class="px-3 py-3">Kontakt B2B &amp; NIP</th>
+              <th class="px-3 py-3">Kupiec &amp; Wycena</th>
+              <th class="px-4 py-3 text-right">Akcje</th>
+            </tr>
+          </thead>
+          <tbody id="leads-tbody" class="divide-y divide-slate-800/70">
+            <tr>
+              <td colspan="6" class="px-4 py-12 text-center text-sm text-slate-400">
+                Ładowanie bazy leadów sygnałowych...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- Mini-Audit Detail Modal -->
+  <div id="audit-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
+    <div class="surface-card custom-scroll max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl p-6">
+      <div class="flex items-start justify-between gap-4 border-b border-slate-800 pb-4">
+        <div>
+          <div class="flex flex-wrap items-center gap-2">
+            <h3 id="modal-company" class="text-lg font-semibold text-slate-50"></h3>
+            <span id="modal-score-badge" class="rounded-md px-2 py-0.5 font-mono text-xs font-semibold"></span>
+          </div>
+          <p id="modal-subtitle" class="mt-1 font-mono text-xs text-slate-400"></p>
+        </div>
+        <button id="btn-close-modal" type="button" class="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-100">
+          <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <div id="modal-body" class="mt-5 space-y-5 text-xs"></div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="pointer-events-none fixed bottom-5 right-5 z-50 hidden rounded-lg border border-emerald-500/30 bg-slate-900/95 px-4 py-2.5 text-xs font-medium text-emerald-200 shadow-xl"></div>
+
+  <script>
+    const state = {
+      teaser: false,
+      minScore: 0,
+      city: 'Wszystkie',
+      buyerPersona: 'Wszystkie',
+      search: '',
+      leads: [],
+      meta: { cities: [], industries: [], buyer_personas: [] },
+    };
+
+    const $ = (id) => document.getElementById(id);
+
+    function formatPLN(val) {
+      return new Intl.NumberFormat('pl-PL').format(val || 0) + ' PLN';
+    }
+
+    function escapeHtml(str) {
+      return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function showToast(msg, isError = false) {
+      const el = $('toast');
+      el.textContent = msg;
+      el.className = isError
+        ? 'fixed bottom-5 right-5 z-50 rounded-lg border border-rose-500/40 bg-slate-900/95 px-4 py-2.5 text-xs font-medium text-rose-200 shadow-xl'
+        : 'fixed bottom-5 right-5 z-50 rounded-lg border border-emerald-500/40 bg-slate-900/95 px-4 py-2.5 text-xs font-medium text-emerald-200 shadow-xl';
+      clearTimeout(window.__toastTimer);
+      window.__toastTimer = setTimeout(() => el.classList.add('hidden'), 3200);
+    }
+
+    function updateModeUI() {
+      const fullBtn = $('btn-mode-full');
+      const teaserBtn = $('btn-mode-teaser');
+      const banner = $('teaser-banner');
+      const csvLabel = $('csv-btn-label');
+
+      if (state.teaser) {
+        teaserBtn.className = 'rounded-md bg-amber-500 px-3.5 py-1.5 text-xs font-semibold text-slate-950 shadow-sm transition-all';
+        fullBtn.className = 'rounded-md px-3.5 py-1.5 text-xs font-semibold text-slate-400 hover:text-slate-200 transition-all';
+        banner.classList.remove('hidden');
+        csvLabel.textContent = 'Eksport CSV (Demo / Teaser)';
+      } else {
+        fullBtn.className = 'rounded-md bg-emerald-500 px-3.5 py-1.5 text-xs font-semibold text-slate-950 shadow-sm transition-all';
+        teaserBtn.className = 'rounded-md px-3.5 py-1.5 text-xs font-semibold text-slate-400 hover:text-slate-200 transition-all';
+        banner.classList.add('hidden');
+        csvLabel.textContent = 'Eksport CSV (Pełny)';
+      }
+    }
+
+    function updateScorePills() {
+      document.querySelectorAll('.score-pill').forEach((btn) => {
+        const val = Number(btn.dataset.minScore);
+        if (val === state.minScore) {
+          btn.className = 'score-pill rounded-md bg-slate-800 px-2.5 py-1 text-xs font-semibold text-slate-100';
+        } else {
+          btn.className = 'score-pill rounded-md px-2.5 py-1 text-xs font-medium text-slate-400 hover:text-slate-200';
+        }
+      });
+    }
+
+    async function loadMeta() {
+      const res = await fetch('/api/meta');
+      const data = await res.json();
+      state.meta = data;
+
+      const fillSelect = (el, items, includeAll = false, allLabel = 'Wszystkie') => {
+        el.innerHTML = includeAll ? `<option value="Wszystkie">${allLabel}</option>` : '';
+        items.forEach((item) => {
+          const opt = document.createElement('option');
+          opt.value = item;
+          opt.textContent = item;
+          el.appendChild(opt);
+        });
+      };
+
+      fillSelect($('audit-city'), data.cities);
+      fillSelect($('audit-industry'), data.industries);
+      fillSelect($('harvest-city'), data.cities);
+      fillSelect($('harvest-industry'), data.industries);
+      fillSelect($('filter-city'), data.cities, true, 'Wszystkie miasta');
+      fillSelect($('filter-buyer'), data.buyer_personas, true, 'Wszyscy kupcy');
+    }
+
+    async function fetchLeads() {
+      const params = new URLSearchParams({
+        min_score: String(state.minScore),
+        teaser: String(state.teaser),
+      });
+      if (state.city !== 'Wszystkie') params.set('city', state.city);
+      if (state.buyerPersona !== 'Wszystkie') params.set('buyer_persona', state.buyerPersona);
+      if (state.search.trim()) params.set('search', state.search.trim());
+
+      const res = await fetch(`/api/leads?${params.toString()}`);
+      const data = await res.json();
+      state.leads = data.leads || [];
+      renderKPIs(data.kpis || {});
+      renderTable(state.leads);
+    }
+
+    function renderKPIs(kpis) {
+      $('kpi-total').textContent = kpis.total_leads ?? 0;
+      $('kpi-contacts').textContent = `${kpis.with_nip_count ?? 0} z NIP · ${kpis.with_email_count ?? 0} z e-mail`;
+      $('kpi-hot').textContent = kpis.hot_leads_75_plus ?? 0;
+      $('kpi-avg-score').textContent = `Śr. ${kpis.avg_score ?? 0} pkt`;
+      $('kpi-pack-value').textContent = formatPLN(kpis.pack_value_pln ?? 0);
+      $('kpi-bundle-price').textContent = formatPLN(kpis.bundle_price_pln ?? 0);
+      $('kpi-bundle-savings').textContent = `Oszczędzasz ${formatPLN(kpis.bundle_savings_pln ?? 0)}`;
+      $('kpi-pipeline').textContent = formatPLN(kpis.total_contract_pipeline_pln ?? 0);
+      $('teaser-pack-pitch').textContent = `Pakiet ${kpis.total_leads ?? 0} firm · Pipeline ${formatPLN(kpis.total_contract_pipeline_pln ?? 0)} → Cena paczki: ${formatPLN(kpis.bundle_price_pln ?? 0)}`;
+    }
+
+    function scoreBadgeClass(score) {
+      if (score >= 75) return 'bg-rose-500/15 text-rose-300 ring-1 ring-rose-500/35';
+      if (score >= 55) return 'bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/35';
+      return 'bg-slate-800 text-slate-300 ring-1 ring-slate-700';
+    }
+
+    function severityDot(sev) {
+      if (sev === 'critical') return 'bg-rose-400';
+      if (sev === 'high') return 'bg-amber-400';
+      return 'bg-sky-400';
+    }
+
+    function renderTable(leads) {
+      const tbody = $('leads-tbody');
+      if (!leads.length) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="6" class="px-4 py-14 text-center">
+              <p class="text-sm font-medium text-slate-300">Brak leadów spełniających kryteria.</p>
+              <p class="mt-1 text-xs text-slate-500">Użyj skanera pojedynczej domeny lub Harvestera Miast powyżej, aby zasilić bazę na żywo.</p>
+            </td>
+          </tr>`;
+        return;
+      }
+
+      tbody.innerHTML = leads.map((lead, idx) => {
+        const topSignals = (lead.signals || []).slice(0, 3);
+        const extraSignals = Math.max(0, (lead.signals || []).length - 3);
+        const emails = lead.emails || [];
+        const phones = lead.phones || [];
+
+        const signalPills = topSignals.map((s) => `
+          <span class="inline-flex items-center gap-1.5 rounded bg-slate-900/90 px-2 py-0.5 text-[11px] text-slate-200 ring-1 ring-slate-800">
+            <span class="h-1.5 w-1.5 rounded-full ${severityDot(s.severity)}"></span>
+            ${escapeHtml(s.label)}
+          </span>
+        `).join('');
+
+        const domainLink = state.teaser
+          ? `<span class="font-mono text-amber-300">${escapeHtml(lead.domain)}</span>`
+          : `<a href="${escapeHtml(lead.url)}" target="_blank" rel="noopener noreferrer" class="font-mono text-emerald-400 hover:underline">${escapeHtml(lead.domain)}</a>`;
+
+        return `
+          <tr class="table-row-hover transition-colors">
+            <td class="px-4 py-3.5 align-top">
+              <div class="font-semibold text-slate-100">${escapeHtml(lead.company_name)}</div>
+              <div class="mt-0.5 flex flex-wrap items-center gap-2">
+                ${domainLink}
+                <span class="text-slate-600">·</span>
+                <span class="text-slate-400">${escapeHtml(lead.city)}</span>
+              </div>
+              <div class="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
+                <span class="rounded bg-slate-800/80 px-1.5 py-0.5">${escapeHtml(lead.industry)}</span>
+                <span class="rounded bg-slate-900 px-1.5 py-0.5 font-mono text-slate-300 ring-1 ring-slate-800">${escapeHtml(lead.cms)}</span>
+                <span class="rounded bg-slate-900 px-1.5 py-0.5 font-mono ${lead.ttfb_ms > 1400 ? 'text-rose-300' : 'text-slate-400'} ring-1 ring-slate-800">${lead.ttfb_ms} ms</span>
+              </div>
+            </td>
+
+            <td class="px-3 py-3.5 text-center align-top">
+              <div class="inline-flex flex-col items-center">
+                <span class="rounded-lg px-2.5 py-1 font-mono text-sm font-bold ${scoreBadgeClass(lead.lead_score)}">
+                  ${lead.lead_score}
+                </span>
+                <span class="mt-1 text-[10px] uppercase tracking-wider text-slate-500">
+                  ${lead.lead_score >= 75 ? 'Gorący' : lead.lead_score >= 55 ? 'Ciepły' : 'Standard'}
+                </span>
+              </div>
+            </td>
+
+            <td class="max-w-[340px] px-3 py-3.5 align-top">
+              <div class="flex flex-wrap gap-1.5">
+                ${signalPills || '<span class="text-slate-500">Brak krytycznych błędów</span>'}
+                ${extraSignals > 0 ? `<span class="rounded bg-slate-800 px-2 py-0.5 font-mono text-[11px] text-slate-400">+${extraSignals} więcej</span>` : ''}
+              </div>
+            </td>
+
+            <td class="px-3 py-3.5 align-top font-mono text-[11px]">
+              ${lead.nip
+                ? `<div class="mb-1 inline-flex items-center gap-1 rounded bg-emerald-500/10 px-1.5 py-0.5 text-emerald-300 ring-1 ring-emerald-500/25">NIP: ${escapeHtml(lead.nip)}</div>`
+                : `<div class="mb-1 text-slate-500">NIP: brak na stronie</div>`}
+              ${emails.length
+                ? `<div class="truncate max-w-[200px] text-slate-200" title="${escapeHtml(emails.join(', '))}">${escapeHtml(emails[0])}</div>`
+                : `<div class="text-slate-500">Brak e-maila</div>`}
+              ${phones.length
+                ? `<div class="mt-0.5 text-slate-400">${escapeHtml(phones[0])}</div>`
+                : ''}
+            </td>
+
+            <td class="px-3 py-3.5 align-top">
+              <div class="font-medium text-slate-200">${escapeHtml(lead.buyer_persona)}</div>
+              <div class="mt-1 flex items-center gap-2 font-mono">
+                <span class="rounded bg-emerald-500/15 px-1.5 py-0.5 text-xs font-semibold text-emerald-300">${lead.lead_price_pln} PLN</span>
+                <span class="text-[11px] text-slate-400">Kontrakt ~${formatPLN(lead.estimated_agency_contract_pln)}</span>
+              </div>
+            </td>
+
+            <td class="px-4 py-3.5 text-right align-top">
+              <div class="inline-flex flex-col items-end gap-1.5">
+                <button
+                  type="button"
+                  data-copy-idx="${idx}"
+                  class="btn-copy-ice inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-2.5 py-1.5 text-[11px] font-medium text-slate-200 ring-1 ring-slate-700 transition hover:bg-slate-700"
+                >
+                  Kopiuj Icebreaker
+                </button>
+                <button
+                  type="button"
+                  data-detail-idx="${idx}"
+                  class="btn-open-detail text-[11px] font-medium text-sky-400 hover:text-sky-300 hover:underline"
+                >
+                  Mini-audyt (${(lead.signals || []).length}) →
+                </button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      document.querySelectorAll('.btn-copy-ice').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const lead = state.leads[Number(btn.dataset.copyIdx)];
+          if (!lead) return;
+          try {
+            await navigator.clipboard.writeText(lead.icebreaker || '');
+            const old = btn.textContent;
+            btn.textContent = '✓ Skopiowano';
+            btn.classList.add('text-emerald-300');
+            showToast(`Skopiowano Icebreaker dla ${lead.company_name}`);
+            setTimeout(() => {
+              btn.textContent = old;
+              btn.classList.remove('text-emerald-300');
+            }, 1800);
+          } catch {
+            showToast('Nie udało się skopiować do schowka.', true);
+          }
+        });
+      });
+
+      document.querySelectorAll('.btn-open-detail').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const lead = state.leads[Number(btn.dataset.detailIdx)];
+          if (lead) openModal(lead);
+        });
+      });
+    }
+
+    function openModal(lead) {
+      $('modal-company').textContent = lead.company_name;
+      const badge = $('modal-score-badge');
+      badge.textContent = `${lead.lead_score} / 99 pkt`;
+      badge.className = `rounded-md px-2 py-0.5 font-mono text-xs font-semibold ${scoreBadgeClass(lead.lead_score)}`;
+      $('modal-subtitle').textContent = `${lead.domain} · ${lead.city} · ${lead.industry} · CMS: ${lead.cms} · TTFB: ${lead.ttfb_ms} ms`;
+
+      const checkRow = (label, ok) => `
+        <div class="flex items-center justify-between rounded-lg bg-slate-900/70 px-3 py-2 ring-1 ring-slate-800/80">
+          <span class="text-slate-300">${label}</span>
+          <span class="font-mono text-[11px] font-semibold ${ok ? 'text-emerald-400' : 'text-rose-400'}">${ok ? 'OK' : 'BRAK'}</span>
+        </div>
+      `;
+
+      const signalsHtml = (lead.signals || []).map((s) => `
+        <div class="flex items-center justify-between gap-3 rounded-lg bg-slate-950/70 px-3 py-2 ring-1 ring-slate-800">
+          <div class="flex items-center gap-2">
+            <span class="h-2 w-2 shrink-0 rounded-full ${severityDot(s.severity)}"></span>
+            <span class="rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] text-slate-300">${escapeHtml(s.category)}</span>
+            <span class="text-slate-200">${escapeHtml(s.label)}</span>
+          </div>
+          <span class="font-mono text-[11px] text-amber-300">+${s.points} pkt</span>
+        </div>
+      `).join('');
+
+      const socials = Object.entries(lead.social_links || {}).map(([k, v]) =>
+        `<span class="rounded bg-slate-800 px-2 py-0.5 font-mono text-[11px] text-slate-300">${escapeHtml(k)}: ${escapeHtml(v)}</span>`
+      ).join(' ');
+
+      $('modal-body').innerHTML = `
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div class="rounded-xl bg-slate-900/80 p-3.5 ring-1 ring-slate-800">
+            <div class="text-[11px] uppercase text-slate-400">Idealny kupiec</div>
+            <div class="mt-1 font-semibold text-slate-100">${escapeHtml(lead.buyer_persona)}</div>
+          </div>
+          <div class="rounded-xl bg-slate-900/80 p-3.5 ring-1 ring-slate-800">
+            <div class="text-[11px] uppercase text-slate-400">Cena leada</div>
+            <div class="mt-1 font-mono text-base font-semibold text-emerald-400">${lead.lead_price_pln} PLN</div>
+          </div>
+          <div class="rounded-xl bg-slate-900/80 p-3.5 ring-1 ring-slate-800">
+            <div class="text-[11px] uppercase text-slate-400">Szacowany kontrakt</div>
+            <div class="mt-1 font-mono text-base font-semibold text-sky-300">${formatPLN(lead.estimated_agency_contract_pln)}</div>
+          </div>
+        </div>
+
+        <div>
+          <h4 class="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Checklista techniczna i marketingowa</h4>
+          <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            ${checkRow('SSL / HTTPS', lead.has_ssl)}
+            ${checkRow('Mobile Viewport', lead.has_viewport)}
+            ${checkRow('Meta Description', lead.has_meta_description)}
+            ${checkRow(`H1 (${lead.h1_count} szt.)`, lead.h1_count === 1)}
+            ${checkRow('Schema.org', lead.has_schema)}
+            ${checkRow('GTM', lead.has_gtm)}
+            ${checkRow('GA4', lead.has_ga4)}
+            ${checkRow('Meta Pixel', lead.has_meta_pixel)}
+          </div>
+        </div>
+
+        <div>
+          <h4 class="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Wykryte sygnały zakupowe (${(lead.signals || []).length})</h4>
+          <div class="space-y-1.5">${signalsHtml || '<p class="text-slate-500">Brak wykrytych problemów.</p>'}</div>
+        </div>
+
+        <div class="rounded-xl bg-slate-900/80 p-4 ring-1 ring-slate-800">
+          <h4 class="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Dane B2B (strona główna + podstrony)</h4>
+          <div class="grid grid-cols-1 gap-2 font-mono sm:grid-cols-2">
+            <div><span class="text-slate-500">NIP:</span> <span class="text-emerald-300">${escapeHtml(lead.nip || 'nie znaleziono')}</span></div>
+            <div><span class="text-slate-500">E-maile:</span> <span class="text-slate-200">${escapeHtml((lead.emails || []).join(', ') || 'brak')}</span></div>
+            <div><span class="text-slate-500">Telefony:</span> <span class="text-slate-200">${escapeHtml((lead.phones || []).join(', ') || 'brak')}</span></div>
+            <div><span class="text-slate-500">HTTP Status:</span> <span class="text-slate-200">${lead.http_status}</span></div>
+          </div>
+          ${socials ? `<div class="mt-2.5 flex flex-wrap gap-1.5">${socials}</div>` : ''}
+        </div>
+
+        <div class="rounded-xl border border-emerald-500/25 bg-emerald-500/5 p-4">
+          <div class="mb-2 flex items-center justify-between">
+            <h4 class="text-xs font-semibold uppercase tracking-wider text-emerald-300">Gotowy Icebreaker do Cold Maila</h4>
+            <button id="modal-copy-ice" type="button" class="rounded-md bg-emerald-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-emerald-500">
+              Kopiuj treść
+            </button>
+          </div>
+          <p class="whitespace-pre-line text-sm leading-relaxed text-slate-100">${escapeHtml(lead.icebreaker)}</p>
+        </div>
+      `;
+
+      $('modal-copy-ice').addEventListener('click', async () => {
+        await navigator.clipboard.writeText(lead.icebreaker || '');
+        showToast('Icebreaker skopiowany do schowka!');
+      });
+
+      const modal = $('audit-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeModal() {
+      const modal = $('audit-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    // Event bindings
+    $('btn-mode-full').addEventListener('click', () => {
+      state.teaser = false;
+      updateModeUI();
+      fetchLeads();
+    });
+    $('btn-mode-teaser').addEventListener('click', () => {
+      state.teaser = true;
+      updateModeUI();
+      fetchLeads();
+    });
+
+    $('btn-export-csv').addEventListener('click', () => {
+      const params = new URLSearchParams({
+        teaser: String(state.teaser),
+        min_score: String(state.minScore),
+      });
+      if (state.city !== 'Wszystkie') params.set('city', state.city);
+      window.location.href = `/api/export/csv?${params.toString()}`;
+    });
+
+    $('btn-export-json').addEventListener('click', () => {
+      const params = new URLSearchParams({
+        teaser: String(state.teaser),
+        min_score: String(state.minScore),
+      });
+      if (state.city !== 'Wszystkie') params.set('city', state.city);
+      window.location.href = `/api/export/json?${params.toString()}`;
+    });
+
+    document.querySelectorAll('.score-pill').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        state.minScore = Number(btn.dataset.minScore);
+        updateScorePills();
+        fetchLeads();
+      });
+    });
+
+    $('filter-city').addEventListener('change', (e) => {
+      state.city = e.target.value;
+      fetchLeads();
+    });
+    $('filter-buyer').addEventListener('change', (e) => {
+      state.buyerPersona = e.target.value;
+      fetchLeads();
+    });
+    $('filter-search').addEventListener('input', (e) => {
+      state.search = e.target.value;
+      clearTimeout(window.__searchDebounce);
+      window.__searchDebounce = setTimeout(fetchLeads, 220);
+    });
+    $('btn-refresh').addEventListener('click', fetchLeads);
+    $('btn-close-modal').addEventListener('click', closeModal);
+    $('audit-modal').addEventListener('click', (e) => {
+      if (e.target === $('audit-modal')) closeModal();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeModal();
+    });
+
+    // Live single-domain audit submit
+    $('audit-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const url = $('audit-url').value.trim();
+      if (!url) return;
+      const btn = $('btn-run-audit');
+      const status = $('audit-status-msg');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner inline-block h-3.5 w-3.5 rounded-full border-2 border-slate-900 border-t-transparent"></span><span>Audytuję...</span>';
+      status.textContent = `Skanuję ${url} + podstrony /kontakt, /o-nas...`;
+
+      try {
+        const res = await fetch('/api/audit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url,
+            city: $('audit-city').value,
+            industry: $('audit-industry').value,
+            teaser: state.teaser,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Błąd audytu');
+        status.textContent = `Gotowe: ${data.lead.company_name} (${data.lead.lead_score} pkt · ${data.lead.lead_price_pln} PLN)`;
+        $('audit-url').value = '';
+        showToast(`Dodano lead: ${data.lead.company_name} (${data.lead.lead_score} pkt)`);
+        await fetchLeads();
+      } catch (err) {
+        status.textContent = `Błąd: ${err.message}`;
+        showToast(err.message, true);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span>Skanuj na żywo</span>';
+      }
+    });
+
+    // Batch harvest submit
+    $('harvest-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const city = $('harvest-city').value;
+      const industry = $('harvest-industry').value;
+      const limit = Number($('harvest-limit').value);
+      const btn = $('btn-run-harvest');
+      const status = $('harvest-status-msg');
+
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner inline-block h-3.5 w-3.5 rounded-full border-2 border-white border-t-transparent"></span><span>Harvester pracuje...</span>';
+      status.textContent = `Pobieram i audytuję ${limit} firm (${city} · ${industry}) — to potrwa ok. 5–15 sek...`;
+
+      try {
+        const res = await fetch('/api/harvest', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ city, industry, limit, teaser: state.teaser }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Błąd harvestera');
+        status.textContent = `Zakończono: przeaudytowano ${data.audited_count} firm z lokalizacji ${city}.`;
+        showToast(`Harvester dodał/zaktualizował ${data.audited_count} leadów (${city})`);
+        await fetchLeads();
+      } catch (err) {
+        status.textContent = `Błąd: ${err.message}`;
+        showToast(err.message, true);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span>Uruchom Harvester</span>';
+      }
+    });
+
+    // Boot
+    (async function init() {
+      updateModeUI();
+      updateScorePills();
+      await loadMeta();
+      await fetchLeads();
+    })();
+  </script>
+</body>
+</html>
