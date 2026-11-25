@@ -578,7 +578,7 @@ class OutreachOfferGenerator:
 
         kpis = LeadDatabase.compute_kpis(matched)
 
-        # Summarize top recurring signals & industries in the matched pack
+        # Summarize top recurring signals (weighted by B2B impact, avoiding TikTok-first noise)
         signal_counter: Counter[str] = Counter()
         industry_counter: Counter[str] = Counter()
         city_counter: Counter[str] = Counter()
@@ -586,95 +586,42 @@ class OutreachOfferGenerator:
             industry_counter[lead.get("industry", "B2B")] += 1
             city_counter[lead.get("city", "Polska")] += 1
             for sig in lead.get("signals", []):
-                signal_counter[sig.get("label", "")] += 1
+                lbl = sig.get("label", "")
+                if not lbl:
+                    continue
+                weight = 1 if sig.get("code") == "missing_tiktok_pixel" else int(sig.get("points", 10))
+                signal_counter[lbl] += weight
 
         top_signals = [label for label, _ in signal_counter.most_common(3) if label]
         top_industries = [ind for ind, _ in industry_counter.most_common(2) if ind]
         cities_in_pack = ", ".join(c for c, _ in city_counter.most_common(3))
 
+        from human_copy import build_human_agency_outreach
+
         agency_name = buyer.get("agency_name", "Zespół")
         agency_type = buyer.get("agency_type", "Agencja Digital Marketing")
         services = buyer.get("services") or []
-        services_hint = ", ".join(services[:3]) if services else agency_type
+        effective_price = (
+            pack_price_pln if pack_price_pln is not None else kpis["bundle_price_pln"]
+        )
 
-        total = kpis["total_leads"]
-        hot = kpis["hot_leads_75_plus"]
-        effective_price = pack_price_pln if pack_price_pln is not None else kpis["bundle_price_pln"]
-        bundle_pln = self._fmt_pln(effective_price)
-        regular_pln = self._fmt_pln(kpis["pack_value_pln"])
-        pipeline_pln = self._fmt_pln(kpis["total_contract_pipeline_pln"])
-        with_nip = kpis["with_nip_count"]
-        with_email = kpis["with_email_count"]
-
-        industries_text = " / ".join(top_industries) if top_industries else "B2B"
-        bullets_md = "\n".join(f"• {s}" for s in top_signals) if top_signals else "• Konkretne luki techniczne, SEO i analityczne (GA4 / Meta Pixel)"
-
-        if total == 0:
-            subject = f"Paczka gorących leadów sygnałowych B2B dla {agency_name} (Demo Teaser)"
-            email_body = (
-                f"Cześć Zespole {agency_name},\n\n"
-                f"Widziałem, że specjalizujecie się w obszarze {services_hint}. "
-                f"W SignalLead PL codziennie skanujemy polskie firmy B2B pod kątem kosztownych błędów "
-                f"(brak SSL, TTFB > 1400 ms, brak GA4/GTM/Meta Pixela, braki SEO/Schema) i budujemy "
-                f"gotowe paczki leadów z walidowanym NIP, e-mailem oraz spersonalizowanym icebreakerem.\n\n"
-                f"Uruchom najpierw Harvester w zakładce 'Leady Sygnałowe', aby wygenerować paczkę z konkretnymi liczbami dla tej agencji.\n\n"
-                f"Pozdrawiam,\n{sender_name}"
-            )
-            linkedin_dm = (
-                f"Cześć! Widziałem Wasze realizacje w {agency_name} ({services_hint}). "
-                f"Generujemy paczki polskich firm B2B z wykrytymi na żywo błędami technicznymi/SEO/Ads + NIP i e-mailem. "
-                f"Mogę podesłać darmowe Demo CSV dla Waszego miasta?"
-            )
-        else:
-            city_prefix = cities_in_pack if used_city_param is None else target_city
-            firms_nom = self._pl_plural(total, "firma", "firmy", "firm")
-            companies_acc = self._pl_plural(total, "konkretną spółkę", "konkretne spółki", "konkretnych spółek")
-            verified_firms = self._pl_plural(total, "zweryfikowana firma", "zweryfikowane firmy", "zweryfikowanych firm")
-            hot_part = f"w tym {self._pl_plural(hot, 'gorący', 'gorące', 'gorących')} 75+ pkt, " if hot > 0 else ""
-            short_sig = re.sub(r"\s*\([^)]*\)", "", top_signals[0]).strip().lower() if top_signals else "braki GA4/SEO"
-
-            pack_link_block = (
-                f"\nPodgląd online + zakup na wyłączność (BLIK / Karta / P24):\n{pack_url}\n"
-                if pack_url
-                else ""
-            )
-
-            subject = (
-                f"{city_prefix}: {firms_nom} ({industries_text}) z wykrytymi błędami WWW/Ads "
-                f"— pipeline ~{pipeline_pln} [Darmowe Demo CSV]"
-            )
-            email_body = (
-                f"Dzień dobry Zespole {agency_name},\n\n"
-                f"Trafiłem na Waszą stronę — widzę, że mocno działacie w obszarze: {services_hint}. "
-                f"Zamiast wysyłać pustą ofertę, przeskanowaliśmy na żywo firmy B2B {scope_label} "
-                f"({industries_text}) i wyłapaliśmy {companies_acc}, które dziś tracą zapytania "
-                f"przez proste do naprawienia luki:\n\n"
-                f"{bullets_md}\n\n"
-                f"Kluczowe liczby tej paczki:\n"
-                f"• {verified_firms} ({hot_part}{with_nip} z walidowanym NIP, {with_email} z bezpośrednim e-mailem B2B)\n"
-                f"• Łączny szacowany potencjał kontraktów dla Waszej agencji: ~{pipeline_pln}\n"
-                f"• Każdy lead ma gotowy mini-audyt techniczny + spersonalizowany Icebreaker do cold maila\n\n"
-                f"Jak to działa (model Teaser-First — wyłączność 1:1, zero ryzyka):\n"
-                f"W załączniku przesyłam darmowy plik Demo CSV z pełną listą wykrytych błędów, TTFB, CMS i wyceną "
-                f"kontraktów (nazwy domen i kontakty są w próbce zamaskowane, np. in*****.pl).\n\n"
-                f"Jeśli po przejrzeniu Demo uznacie, że te firmy pasują do Waszego pipeline'u, "
-                f"pełną paczkę CSV/JSON z odkrytymi domenami, NIP-ami i e-mailami odblokowujemy na wyłączność "
-                f"za {bundle_pln} (cena końcowa bez VAT; zamiast {regular_pln} — po zakupie paczka znika ze sprzedaży)."
-                f"{pack_link_block}\n"
-                f"Czy mam zarezerwować tę paczkę na wyłączność dla {agency_name} na 48h?\n\n"
-                f"Pozdrawiam,\n{sender_name}"
-            )
-            dm_cta = (
-                f"Tutaj możesz od razu podejrzeć darmowe Demo (zamaskowane domeny, pełny audyt): {pack_url}"
-                if pack_url
-                else "Mogę wrzucić tu darmowe Demo CSV (zamaskowane domeny, pełny audyt błędów), żebyście ocenili jakość?"
-            )
-            linkedin_dm = (
-                f"Cześć! Widzę, że w {agency_name} dowozicie {services_hint}. "
-                f"Właśnie przeskanowaliśmy {firms_nom} ({industries_text}, {city_prefix}) z konkretnymi lukami "
-                f"(m.in. {short_sig}) — łączny pipeline ok. {pipeline_pln}. "
-                f"{dm_cta}"
-            )
+        subject, email_body, linkedin_dm = build_human_agency_outreach(
+            agency_name=agency_name,
+            buyer_domain=buyer.get("domain", ""),
+            services=services,
+            agency_type=agency_type,
+            total_leads=kpis["total_leads"],
+            hot_leads=kpis["hot_leads_75_plus"],
+            with_nip=kpis["with_nip_count"],
+            with_email=kpis["with_email_count"],
+            bundle_price_pln=effective_price,
+            pipeline_pln=kpis["total_contract_pipeline_pln"],
+            top_signals=top_signals,
+            top_industries=top_industries,
+            used_city=used_city_param,
+            sender_name=sender_name,
+            pack_url=pack_url,
+        )
 
         # Build direct 1-click Teaser CSV download URL matching this offer
         qs_parts = ["teaser=true", f"min_score={min_score}"]
