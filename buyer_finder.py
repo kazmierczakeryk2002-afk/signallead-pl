@@ -544,6 +544,8 @@ class OutreachOfferGenerator:
         min_score: int = 0,
         match_persona_only: bool = False,
         sender_name: str = "Zespół SignalLead PL",
+        pack_url: Optional[str] = None,
+        pack_price_pln: Optional[int] = None,
     ) -> dict[str, Any]:
         target_city = pack_city if (pack_city and pack_city != "Wszystkie") else buyer.get("city")
         persona_filter = buyer.get("agency_type") if match_persona_only else None
@@ -597,7 +599,8 @@ class OutreachOfferGenerator:
 
         total = kpis["total_leads"]
         hot = kpis["hot_leads_75_plus"]
-        bundle_pln = self._fmt_pln(kpis["bundle_price_pln"])
+        effective_price = pack_price_pln if pack_price_pln is not None else kpis["bundle_price_pln"]
+        bundle_pln = self._fmt_pln(effective_price)
         regular_pln = self._fmt_pln(kpis["pack_value_pln"])
         pipeline_pln = self._fmt_pln(kpis["total_contract_pipeline_pln"])
         with_nip = kpis["with_nip_count"]
@@ -630,6 +633,12 @@ class OutreachOfferGenerator:
             hot_part = f"w tym {self._pl_plural(hot, 'gorący', 'gorące', 'gorących')} 75+ pkt, " if hot > 0 else ""
             short_sig = re.sub(r"\s*\([^)]*\)", "", top_signals[0]).strip().lower() if top_signals else "braki GA4/SEO"
 
+            pack_link_block = (
+                f"\nPodgląd online + zakup na wyłączność (BLIK / Karta / P24):\n{pack_url}\n"
+                if pack_url
+                else ""
+            )
+
             subject = (
                 f"{city_prefix}: {firms_nom} ({industries_text}) z wykrytymi błędami WWW/Ads "
                 f"— pipeline ~{pipeline_pln} [Darmowe Demo CSV]"
@@ -645,20 +654,26 @@ class OutreachOfferGenerator:
                 f"• {verified_firms} ({hot_part}{with_nip} z walidowanym NIP, {with_email} z bezpośrednim e-mailem B2B)\n"
                 f"• Łączny szacowany potencjał kontraktów dla Waszej agencji: ~{pipeline_pln}\n"
                 f"• Każdy lead ma gotowy mini-audyt techniczny + spersonalizowany Icebreaker do cold maila\n\n"
-                f"Jak to działa (model Teaser-First — zero ryzyka):\n"
+                f"Jak to działa (model Teaser-First — wyłączność 1:1, zero ryzyka):\n"
                 f"W załączniku przesyłam darmowy plik Demo CSV z pełną listą wykrytych błędów, TTFB, CMS i wyceną "
                 f"kontraktów (nazwy domen i kontakty są w próbce zamaskowane, np. in*****.pl).\n\n"
                 f"Jeśli po przejrzeniu Demo uznacie, że te firmy pasują do Waszego pipeline'u, "
-                f"pełną paczkę CSV/JSON z odkrytymi domenami, NIP-ami i e-mailami odblokowujemy za {bundle_pln} "
-                f"(pakiet -25% zamiast {regular_pln}).\n\n"
+                f"pełną paczkę CSV/JSON z odkrytymi domenami, NIP-ami i e-mailami odblokowujemy na wyłączność "
+                f"za {bundle_pln} (cena końcowa bez VAT; zamiast {regular_pln} — po zakupie paczka znika ze sprzedaży)."
+                f"{pack_link_block}\n"
                 f"Czy mam zarezerwować tę paczkę na wyłączność dla {agency_name} na 48h?\n\n"
                 f"Pozdrawiam,\n{sender_name}"
+            )
+            dm_cta = (
+                f"Tutaj możesz od razu podejrzeć darmowe Demo (zamaskowane domeny, pełny audyt): {pack_url}"
+                if pack_url
+                else "Mogę wrzucić tu darmowe Demo CSV (zamaskowane domeny, pełny audyt błędów), żebyście ocenili jakość?"
             )
             linkedin_dm = (
                 f"Cześć! Widzę, że w {agency_name} dowozicie {services_hint}. "
                 f"Właśnie przeskanowaliśmy {firms_nom} ({industries_text}, {city_prefix}) z konkretnymi lukami "
                 f"(m.in. {short_sig}) — łączny pipeline ok. {pipeline_pln}. "
-                f"Mogę wrzucić tu darmowe Demo CSV (zamaskowane domeny, pełny audyt błędów), żebyście ocenili jakość?"
+                f"{dm_cta}"
             )
 
         # Build direct 1-click Teaser CSV download URL matching this offer
@@ -680,6 +695,7 @@ class OutreachOfferGenerator:
             "top_industries": top_industries,
             "matched_kpis": kpis,
             "teaser_csv_url": teaser_csv_url,
+            "pack_url": pack_url,
         }
 
 
