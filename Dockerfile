@@ -17,7 +17,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY engine.py human_copy.py buyer_finder.py pack_store.py outreach_mailer.py app.py cli.py dashboard.html pack_page.html ./
 
-RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+RUN useradd -m -u 1000 appuser && mkdir -p /data && chown -R appuser:appuser /app /data
 USER appuser
 
 EXPOSE 8000
