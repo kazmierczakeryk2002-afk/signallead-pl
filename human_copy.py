@@ -329,7 +329,7 @@ def build_human_agency_outreach(
         email_body = (
             f"Dzień dobry,\n\n"
             f"sprawdziłem dziś kilka {ind_gen} {city_in} pod kątem technicznym i analityki. "
-            f"Odłożyłem {count_ind_acc}, u których na stronie widać podstawowe rzeczy do poprawy, głównie {gaps_two}.\n\n"
+            f"Znalazłem {count_ind_acc}, u których na stronie widać podstawowe rzeczy do poprawy, głównie {gaps_two}.\n\n"
             f"W załączniku wysyłam krótką próbkę w CSV z samymi wynikami audytu, na razie bez nazw firm. "
             f"Jeśli szukacie teraz nowych klientów z tej branży, mogę oddać pełną listę z domenami, mailami i NIP-ami "
             f"na wyłączność dla {agency_name} za {price_str} bez VAT. Po sprzedaży nie wysyłam jej nikomu więcej.\n\n"
