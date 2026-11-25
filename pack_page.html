@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SignalLead PL — Paczka Leadów Sygnałowych B2B (Na wyłączność)</title>
-  <meta name="description" content="Podgląd paczki zweryfikowanych leadów sygnałowych B2B w Polsce — zakup na wyłączność (BLIK, Karta, Przelewy24) i natychmiastowe pobranie pełnego pliku CSV/JSON." />
+  <title>SignalLead PL - Lista firm B2B na wyłączność</title>
+  <meta name="description" content="Anonimowy podgląd listy zweryfikowanych firm B2B w Polsce. Zakup na wyłączność przez BLIK, kartę lub Przelewy24 i natychmiastowe pobranie pliku CSV oraz JSON." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -295,9 +295,9 @@
             </div>
 
             <div class="mt-5 grid grid-cols-1 gap-3 rounded-xl bg-slate-950/60 p-4 font-mono text-[11px] text-slate-300 sm:grid-cols-4">
-              <div><span class="text-slate-500">Nabywca:</span> ${escapeHtml(p.buyer_name || '—')}</div>
+              <div><span class="text-slate-500">Nabywca:</span> ${escapeHtml(p.buyer_name || '-')}</div>
               <div><span class="text-slate-500">NIP:</span> ${escapeHtml(p.buyer_nip || 'nie podano')}</div>
-              <div><span class="text-slate-500">E-mail:</span> ${escapeHtml(p.buyer_email || '—')}</div>
+              <div><span class="text-slate-500">E-mail:</span> ${escapeHtml(p.buyer_email || '-')}</div>
               <div><span class="text-slate-500">Kwota (bez VAT):</span> <span class="text-emerald-300">${formatPLN(p.final_price_pln)}</span> (${escapeHtml((p.payment_method || 'blik').toUpperCase())})</div>
             </div>
           </section>
@@ -362,10 +362,10 @@
         ctaBlock = `
           <div class="space-y-3">
             <button id="btn-buy-pack" type="button" class="w-full rounded-xl bg-emerald-500 px-6 py-3.5 text-sm font-bold text-slate-950 shadow-lg transition hover:bg-emerald-400 active:scale-[0.99]">
-              Odblokuj na wyłączność — ${formatPLN(p.final_price_pln)} (BLIK · Karta · P24)
+              Odblokuj na wyłączność za ${formatPLN(p.final_price_pln)} (BLIK · Karta · P24)
             </button>
             <div class="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
-              <span>Cena końcowa (bez VAT) · Możesz podać NIP do rachunku</span>
+              <span>Cena końcowa bez VAT · Możesz podać NIP do rachunku</span>
               <a href="/api/packs/${encodeURIComponent(p.pack_id)}/demo.csv" class="font-medium text-amber-300 hover:underline">
                 Pobierz anonimową próbkę CSV ↓
               </a>
@@ -374,7 +374,7 @@
       }
 
       root.innerHTML = `
-        ${route.canceled ? '<div class="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-200">Płatność została przerwana — jeśli chcesz wrócić do zakupu, lista nadal jest wolna.</div>' : ''}
+        ${route.canceled ? '<div class="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-200">Płatność została przerwana. Jeśli chcesz wrócić do zakupu, lista nadal jest dostępna.</div>' : ''}
 
         <section class="surface-card rounded-2xl p-6 sm:p-8">
           <div class="grid grid-cols-1 gap-8 lg:grid-cols-12">
@@ -386,7 +386,7 @@
               </div>
               <h1 class="text-2xl font-bold tracking-tight text-slate-50 sm:text-3xl">${escapeHtml(p.title)}</h1>
               <p class="text-sm leading-relaxed text-slate-300">
-                ${escapeHtml(p.description || 'Świeżo sprawdzona lista polskich firm z konkretnymi brakami na stronie (m.in. wolny serwer, brak GA4/GTM, brak pixela Mety lub podstaw SEO). Poniżej widzisz anonimową próbkę z samymi wynikami — po zakupie od razu pobierasz pełny plik CSV i JSON z domenami, NIP-ami, mailami oraz gotową krótką wiadomością otwierającą pod każdą firmę.')}
+                ${escapeHtml(p.description || 'Świeżo sprawdzona lista polskich firm z konkretnymi brakami na stronie, m.in. wolny serwer, brak GA4, GTM, pixela Mety lub podstaw SEO. Poniżej widzisz anonimową próbkę z samymi wynikami. Po zakupie od razu pobierasz pełny plik CSV i JSON z domenami, NIP-ami, mailami oraz krótką wiadomością otwierającą pod każdą firmę.')}
               </p>
 
               <div class="grid grid-cols-2 gap-3 pt-2 sm:grid-cols-4">
@@ -423,7 +423,7 @@
                 <ul class="mt-4 space-y-2 text-xs text-slate-300">
                   <li>✓ Od razu po opłaceniu pobierasz plik CSV (Excel) i JSON</li>
                   <li>✓ Odkryte domeny, zweryfikowane NIP-y, maile i telefony</li>
-                  <li>✓ Krótka, ludzka wiadomość na start pod każdą firmę</li>
+                  <li>✓ Krótka, naturalna wiadomość na start pod każdą firmę</li>
                   <li>✓ Po zakupie lista znika ze sprzedaży dla innych agencji</li>
                 </ul>
               </div>
@@ -456,7 +456,7 @@
           } catch (err) {
             alert(err.message);
             buyBtn.disabled = false;
-            buyBtn.textContent = `Kup na wyłączność — ${formatPLN(p.final_price_pln)} (BLIK · Karta · P24)`;
+            buyBtn.textContent = `Odblokuj na wyłączność za ${formatPLN(p.final_price_pln)} (BLIK · Karta · P24)`;
           }
         });
       }

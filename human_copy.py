@@ -1,10 +1,12 @@
 """
-SignalLead PL — Natural Polish Human Copywriting Engine (Anti-AI-Slop).
+SignalLead PL - Natural Polish Business Correspondence Engine.
 
-Ensures every customer-facing message (lead icebreakers, agency cold emails,
-LinkedIn DMs) reads like a concise, respectful 1-on-1 message written by a real
-Polish founder/specialist — proper Polish city & industry declensions, natural
-technical phrasing, subtle deterministic variation, and zero corporate/AI clichés.
+Writes concise, calm, polite Polish business emails, LinkedIn DMs, and lead
+icebreakers indistinguishable from real human B2B correspondence:
+  - Zero em-dashes
+  - Zero parenthetical stat dumps like "(2 szt.)" or "(bez VAT)"
+  - Zero exclamation-mark spam or AI flattery/slang
+  - Proper Polish declensions for cities and industries
 """
 
 from __future__ import annotations
@@ -24,32 +26,34 @@ CITY_IN: dict[str, str] = {
     "Polska": "w Polsce",
 }
 
-# Natural Polish industry names: (genitive plural "kilku ...", nominative plural "4 ...", short subject form)
+# Proper Polish genitive ("z ...")
+CITY_FROM: dict[str, str] = {
+    "Warszawa": "z Warszawy",
+    "Kraków": "z Krakowa",
+    "Wrocław": "z Wrocławia",
+    "Poznań": "z Poznania",
+    "Gdańsk": "z Gdańska",
+    "Katowice": "z Katowic",
+    "Łódź": "z Łodzi",
+    "Polska": "z Polski",
+}
+
+# Natural Polish industry names: (genitive plural, capitalized subject plural, short plural)
 INDUSTRY_HUMAN: dict[str, tuple[str, str, str]] = {
-    "Kancelarie Prawne/Podatkowe": ("kancelarii prawnych", "kancelarie", "kancelarii"),
-    "Kliniki Medyczne/Stomatologia": ("klinik stomatologicznych i medycznych", "kliniki", "klinik"),
-    "Architektura/Budownictwo": ("pracowni architektonicznych i firm budowlanych", "firmy budowlane", "firm z budowlanki"),
-    "Nieruchomości": ("biur nieruchomości i deweloperów", "firmy z nieruchomości", "firm z nieruchomości"),
-    "Hotele B2B": ("hoteli i obiektów konferencyjnych", "hotele", "hoteli"),
-    "Produkcja/Logistyka": ("firm produkcyjnych i logistycznych", "firmy produkcyjne", "firm z produkcji i logistyki"),
+    "Kancelarie Prawne/Podatkowe": ("kancelarii prawnych", "Kancelarie", "kancelarie"),
+    "Kliniki Medyczne/Stomatologia": ("klinik stomatologicznych", "Kliniki", "kliniki"),
+    "Architektura/Budownictwo": ("pracowni architektonicznych i firm budowlanych", "Firmy budowlane", "firmy"),
+    "Nieruchomości": ("biur nieruchomości", "Firmy z nieruchomości", "firmy"),
+    "Hotele B2B": ("hoteli", "Hotele", "hotele"),
+    "Produkcja/Logistyka": ("firm produkcyjnych i logistycznych", "Firmy produkcyjne", "firmy"),
 }
 
-# Natural conversational phrasing for detected agency services
-SERVICE_HUMAN: dict[str, str] = {
-    "SEO / Pozycjonowanie": "SEO",
-    "Google Ads / SEM": "Google Ads",
-    "Meta Ads / Social Ads": "kampanie w social mediach",
-    "Analityka GA4 / GTM": "analitykę",
-    "Web Dev / WordPress": "strony WWW",
-    "Software House / Custom IT": "projekty webowe",
-    "E-commerce": "e-commerce",
-}
-
-AGENCY_TYPE_HUMAN: dict[str, str] = {
-    "Software House / Agencja Web Dev": "strony i aplikacje webowe",
-    "Agencja Performance & SEO 360": "SEO i kampanie performance",
-    "Agencja SEO / SEM": "SEO i Google Ads",
-    "Agencja Digital Marketing": "marketing internetowy i pozyskiwanie klientów",
+# Single concise human focus phrase per agency type (never dumps 3 scraped DB tags)
+AGENCY_FOCUS_HUMAN: dict[str, str] = {
+    "Software House / Agencja Web Dev": "tworzeniem i rozwojem stron",
+    "Agencja Performance & SEO 360": "marketingiem i SEO",
+    "Agencja SEO / SEM": "SEO i kampaniami Google Ads",
+    "Agencja Digital Marketing": "marketingiem internetowym",
 }
 
 
@@ -71,7 +75,13 @@ def pl_plural(n: int, one: str, few: str, many: str) -> str:
 def city_locative(city: Optional[str]) -> str:
     if not city or city == "Wszystkie":
         return "w Polsce"
-    return CITY_IN.get(city, f"w mieście {city}")
+    return CITY_IN.get(city, f"w {city}")
+
+
+def city_genitive(city: Optional[str]) -> str:
+    if not city or city == "Wszystkie":
+        return "z Polski"
+    return CITY_FROM.get(city, f"z {city}")
 
 
 def format_zl(amount: int) -> str:
@@ -79,38 +89,36 @@ def format_zl(amount: int) -> str:
 
 
 def humanize_services(services: list[str], agency_type: str) -> str:
-    mapped: list[str] = []
-    for s in services:
-        h = SERVICE_HUMAN.get(s)
-        if h and h not in mapped:
-            mapped.append(h)
-    if not mapped:
-        return AGENCY_TYPE_HUMAN.get(agency_type, "marketing internetowy")
-    top = mapped[:3]
-    if len(top) == 1:
-        return top[0]
-    if len(top) == 2:
-        return f"{top[0]} i {top[1]}"
-    return f"{top[0]}, {top[1]} i {top[2]}"
+    """Return one concise, natural Polish phrase describing an agency's focus."""
+    s = set(services)
+    if "SEO / Pozycjonowanie" in s and "Google Ads / SEM" in s:
+        return "SEO i reklamą w Google"
+    if "SEO / Pozycjonowanie" in s:
+        return "SEO i widocznością stron"
+    if "Software House / Custom IT" in s or "Web Dev / WordPress" in s:
+        return "tworzeniem i poprawą stron"
+    if "Meta Ads / Social Ads" in s:
+        return "kampaniami reklamowymi"
+    return AGENCY_FOCUS_HUMAN.get(agency_type, "marketingiem internetowym")
 
 
 def humanize_signal_for_owner(code: str, ttfb_ms: int = 0) -> str:
-    """Plain, respectful Polish description of a website gap for the company owner."""
+    """Plain, respectful Polish description of a technical gap without parentheses."""
     if code == "no_ssl":
-        return "strona otwiera się bez szyfrowania HTTPS, przez co Chrome pokazuje ostrzeżenie"
+        return "strona otwiera się bez szyfrowania HTTPS, przez co przeglądarka pokazuje ostrzeżenie"
     if code == "slow_ttfb":
         sec = f"{ttfb_ms / 1000:.1f}".replace(".", ",")
-        return f"serwer odpowiada dość wolno (ok. {sec} s zanim strona w ogóle ruszy)"
+        return f"serwer odpowiada dość wolno, ponad {sec} sekundy na start"
     if code == "no_viewport":
-        return "strona nie skaluje się poprawnie na telefonach (brak ustawień mobile viewport)"
+        return "strona nie dopasowuje się poprawnie do ekranów telefonów"
     if code == "legacy_cms":
-        return "strona stoi jeszcze na starszym silniku CMS, który utrudnia rozbudowę i pozycjonowanie"
+        return "strona działa na starszym silniku CMS, co utrudnia jej rozwój i pozycjonowanie"
     if code == "missing_meta_description":
-        return "brakuje opisów meta, przez co wizytówka w Google wygląda gorzej niż u konkurencji"
+        return "brakuje opisów meta widocznych w wynikach Google"
     if code == "missing_h1":
-        return "na stronie głównej brakuje głównego nagłówka H1 dla wyszukiwarki"
+        return "na stronie głównej brakuje nagłówka H1 dla wyszukiwarki"
     if code == "multiple_h1":
-        return "nagłówki H1 są rozbite na kilka miejsc na stronie głównej, co osłabia SEO"
+        return "na stronie głównej jest kilka osobnych nagłówków H1"
     if code == "missing_schema":
         return "brakuje danych strukturalnych Schema.org dla Google"
     if code == "missing_ga4":
@@ -118,23 +126,23 @@ def humanize_signal_for_owner(code: str, ttfb_ms: int = 0) -> str:
     if code == "missing_gtm":
         return "nie ma wdrożonego Google Tag Managera"
     if code == "missing_meta_pixel":
-        return "brakuje pixela Mety do zbierania ruchu na remarketing"
+        return "brakuje pixela Mety do mierzenia ruchu z reklam"
     if code == "missing_tiktok_pixel":
-        return "nie ma podpiętej analityki pod kampanie social"
-    return "widać kilka prostych luk technicznych na stronie"
+        return "brakuje podstawowej analityki pod kampanie w social mediach"
+    return "widać kilka podstawowych braków technicznych na stronie"
 
 
 def humanize_signal_short(label_or_code: str) -> str:
-    """Short, natural Polish phrase for agency outreach emails (no raw system tags)."""
+    """Short, plain Polish phrase for agency business emails (no parentheses, no jargon)."""
     low = label_or_code.lower()
     if "ssl" in low or "https" in low:
-        return "brak SSL/HTTPS"
+        return "brak SSL"
     if "ttfb" in low or "wolny" in low:
-        return "wolny serwer (TTFB > 1,4 s)"
+        return "wolną odpowiedź serwera"
     if "viewport" in low or "mobil" in low:
         return "brak wersji mobilnej"
     if "joomla" in low or "wix" in low or "przestarza" in low:
-        return "stary CMS"
+        return "starszy CMS"
     if "description" in low:
         return "brak meta opisów"
     if "h1" in low:
@@ -149,7 +157,7 @@ def humanize_signal_short(label_or_code: str) -> str:
         return "brak pixela Mety"
     if "tiktok" in low:
         return "brak pixela TikTok"
-    return "luki techniczne na stronie"
+    return "braki techniczne na stronie"
 
 
 def _join_pl(items: list[str]) -> str:
@@ -158,8 +166,7 @@ def _join_pl(items: list[str]) -> str:
         if item not in unique:
             unique.append(item)
     if not unique:
-        return "kilka prostych braków na stronie"
-    # Collapse repeated "brak X, brak Y" -> "brak X, Y" for natural Polish flow
+        return "kilka podstawowych braków na stronie"
     cleaned: list[str] = []
     prev_was_brak = False
     for item in unique:
@@ -172,11 +179,11 @@ def _join_pl(items: list[str]) -> str:
         return cleaned[0]
     if len(cleaned) == 2:
         return f"{cleaned[0]} i {cleaned[1]}"
-    return f"{', '.join(cleaned[:-1])} oraz {cleaned[-1]}"
+    return f"{', '.join(cleaned[:-1])} i {cleaned[-1]}"
 
 
 # ---------------------------------------------------------------------------
-# 1. Human Icebreaker for End B2B Company (used by agency buyers)
+# 1. Human Polish Business Icebreaker for End B2B Company
 # ---------------------------------------------------------------------------
 
 
@@ -187,14 +194,14 @@ def build_human_icebreaker(
     signals: list[Any],
     ttfb_ms: int = 0,
 ) -> str:
-    """Generate a natural, short Polish 1-on-1 icebreaker with zero AI slop."""
+    """Generate a calm, polite, human Polish business email opener (zero em-dashes or parentheses)."""
     v = _pick_variant(domain, 3)
 
     if not signals:
         openings = [
-            f"Dzień dobry, zajrzałem dziś na {domain} i technicznie strona wygląda solidnie, ale widzę dwie drobne rzeczy, które potrafią podnieść liczbę zapytań z Google. Mogę je krótko wypisać w mailu?",
-            f"Dzień dobry, przeglądałem dziś strony firm {city_locative(city)} i wpadłem na {domain}. Podstawa jest dobrze zrobiona, ale mam 2 szybkie pomysły pod konwersję — podesłać w kilku zdaniach?",
-            f"Cześć, rzuciłem okiem na {domain} ({company_name}). Strona działa sprawnie, natomiast widzę małą rezerwę w pozyskiwaniu zapytań z wyszukiwarki — mogę podesłać krótką notatkę?",
+            f"Dzień dobry, zajrzałem dziś na {domain} i technicznie strona wygląda bardzo dobrze, ale widzę dwie drobne rzeczy, które mogą poprawić liczbę zapytań z Google. Czy mogę krótko napisać o co chodzi?",
+            f"Dzień dobry, przeglądałem dziś strony firm {city_locative(city)} i trafiłem na {domain}. Podstawa działa sprawnie, mam jednak dwie małe uwagi pod widoczność w wyszukiwarce. Czy mogę przesłać krótką notatkę?",
+            f"Dzień dobry, sprawdziłem stronę {domain} pod kątem SEO i szybkości. Działa bez większych błędów, ale widzę dwie proste rzeczy do dopracowania. Czy ktoś u Państwa zajmuje się obecnie stroną?",
         ]
         return openings[v]
 
@@ -219,25 +226,24 @@ def build_human_icebreaker(
 
     if v == 0:
         return (
-            f"Dzień dobry, zajrzałem dziś na {domain} i rzuciły mi się w oczy dwie proste rzeczy: "
-            f"{gaps}. Jeśli to u Państwa aktualny temat, mogę w 3 krótkich punktach napisać, "
-            f"jak to najszybciej ogarnąć?"
+            f"Dzień dobry, wszedłem dziś na {domain} i zauważyłem, że {gaps}. "
+            f"Czy ktoś u Państwa zajmuje się teraz opieką nad stroną, czy mogę przesłać krótką notatkę co warto poprawić?"
         )
     if v == 1:
         return (
-            f"Dzień dobry, przeglądałem dziś strony firm {city_locative(city)} i sprawdziłem przy okazji {domain}. "
-            f"Widzę tam konkretny temat do poprawy: {gaps} — przez to część osób z Google może po prostu uciekać. "
-            f"Mogę podesłać krótką notatkę, co warto poprawić w pierwszej kolejności?"
+            f"Dzień dobry, sprawdzałem dziś kilka stron firm {city_locative(city)} i trafiłem na {domain}. "
+            f"Zauważyłem, że {gaps}, przez co część osób wchodzących z Google może od razu wychodzić. "
+            f"Mogę wysłać w mailu krótką listę rzeczy do poprawy?"
         )
     return (
-        f"Dzień dobry, wpadłem na stronę {company_name} ({domain}) i zauważyłem, że {gaps}. "
-        f"Zwykle da się to naprawić dość sprawnie bez przebudowy całej strony — "
-        f"chcą Państwo rzucić okiem na krótką listę poprawek?"
+        f"Dzień dobry, przy sprawdzaniu strony {domain} zauważyłem, że {gaps}. "
+        f"Zwykle takie kwestie da się poprawić bez przebudowy całej strony. "
+        f"Jeśli temat jest u Państwa otwarty, chętnie prześlę kilka konkretnych uwag."
     )
 
 
 # ---------------------------------------------------------------------------
-# 2. Human Teaser-First Cold Mail & LinkedIn DM for Polish Agencies
+# 2. Human Polish Business Cold Mail & LinkedIn DM for Agencies
 # ---------------------------------------------------------------------------
 
 
@@ -259,130 +265,117 @@ def build_human_agency_outreach(
     pack_url: Optional[str] = None,
 ) -> tuple[str, str, str]:
     """
-    Build (subject, email_body, linkedin_dm) written like a real human founder in Poland.
-    Zero AI buzzwords, zero corporate templates, proper Polish grammar.
+    Build (subject, email_body, linkedin_dm) in plain, authentic Polish business style.
+    Zero em-dashes, zero parentheses, zero exclamation marks, zero AI buzzwords.
     """
     v = _pick_variant(buyer_domain or agency_name, 3)
-    natural_services = humanize_services(services, agency_type)
+    focus = humanize_services(services, agency_type)
     city_in = city_locative(used_city)
+    city_from = city_genitive(used_city)
     clean_sender = (
         sender_name.strip()
         if sender_name and sender_name.strip() != "Zespół SignalLead PL"
         else "Eryk"
     )
 
-    # Human industry phrasing
     primary_ind = top_industries[0] if top_industries else ""
-    ind_gen, ind_few, ind_many = INDUSTRY_HUMAN.get(
-        primary_ind, ("firm B2B", "firmy B2B", "firm B2B")
+    ind_gen, ind_subj_cap, _ = INDUSTRY_HUMAN.get(
+        primary_ind, ("firm B2B", "Firmy", "firmy")
     )
 
     short_gaps = [humanize_signal_short(s) for s in top_signals[:3]]
-    gaps_text = _join_pl(short_gaps[:2])
-    gaps_email = _join_pl(short_gaps[:3])
+    gaps_two = _join_pl(short_gaps[:2])
+    gaps_three = _join_pl(short_gaps[:3])
 
     if total_leads == 0:
-        subject = f"krótkie pytanie o nowych klientów dla {agency_name}"
+        subject = f"Pytanie ws. klientów dla {agency_name}"
         email_body = (
-            f"Cześć,\n\n"
-            f"wpadłem na stronę {agency_name} i widzę, że zajmujecie się głównie takimi tematami jak {natural_services}.\n\n"
-            f"Wyszukuję na bieżąco polskie firmy B2B, które mają na stronie konkretne, kosztowne braki "
-            f"(np. brak GA4/pixela, wolny serwer, brak SSL lub podstaw SEO) i składam z tego krótkie listy na wyłączność "
-            f"dla jednej agencji.\n\n"
-            f"Najpierw podeślij sobie kilka firm przez Harvester w panelu, żeby mail miał konkretne liczby dla tej agencji.\n\n"
+            f"Dzień dobry,\n\n"
+            f"ponieważ w {agency_name} zajmujecie się {focus}, chciałem zapytać czy korzystacie "
+            f"z gotowych list polskich firm z wykrytymi brakami technicznymi lub w analityce.\n\n"
+            f"Przed wysłaniem uruchom najpierw skan firm w panelu, żeby mail zawierał konkretne liczby.\n\n"
             f"Pozdrawiam,\n{clean_sender}"
         )
         linkedin_dm = (
-            f"Cześć! Widzę, że w {agency_name} ogarniacie {natural_services}. "
-            f"Zbieram listy polskich firm z konkretnymi brakami na stronie (GA4, pixel, szybkość, SEO) na wyłączność dla 1 agencji. "
-            f"Podesłać Ci anonimową próbkę z Waszego miasta?"
+            f"Dzień dobry, widzę, że w {agency_name} zajmujecie się {focus}. "
+            f"Zbieram listy polskich firm z konkretnymi brakami na stronie na wyłączność dla jednej agencji. "
+            f"Czy mogę podesłać anonimową próbkę w CSV?"
         )
         return subject, email_body, linkedin_dm
 
-    # Proper Polish count for industry/firms
-    firms_phrase = pl_plural(total_leads, "firma", "firmy", "firm")
     if primary_ind == "Kancelarie Prawne/Podatkowe":
         count_ind = pl_plural(total_leads, "kancelaria", "kancelarie", "kancelarii")
         count_ind_acc = pl_plural(total_leads, "kancelarię", "kancelarie", "kancelarii")
+        count_ind_gen = pl_plural(total_leads, "kancelarii", "kancelarii", "kancelarii")
     elif primary_ind == "Kliniki Medyczne/Stomatologia":
         count_ind = pl_plural(total_leads, "klinika", "kliniki", "klinik")
         count_ind_acc = pl_plural(total_leads, "klinikę", "kliniki", "klinik")
+        count_ind_gen = pl_plural(total_leads, "kliniki", "klinik", "klinik")
     elif primary_ind == "Hotele B2B":
         count_ind = pl_plural(total_leads, "hotel", "hotele", "hoteli")
         count_ind_acc = pl_plural(total_leads, "hotel", "hotele", "hoteli")
+        count_ind_gen = pl_plural(total_leads, "hotelu", "hoteli", "hoteli")
     else:
-        count_ind = firms_phrase
+        count_ind = pl_plural(total_leads, "firma", "firmy", "firm")
         count_ind_acc = pl_plural(total_leads, "firmę", "firmy", "firm")
+        count_ind_gen = pl_plural(total_leads, "firmy", "firm", "firm")
 
     price_str = format_zl(bundle_price_pln)
-    link_sentence = (
-        f"Podgląd online z możliwością odblokowania od ręki (BLIK/karta) wrzuciłem też tutaj: {pack_url}\n\n"
-        if pack_url
-        else ""
-    )
-    hot_note = (
-        f" ({pl_plural(hot_leads, 'pilny przypadek', 'pilne przypadki', 'pilnych przypadków')} z dużymi brakami)"
-        if hot_leads > 0
-        else ""
-    )
+    link_line_a = f"Można ją też podejrzeć online tutaj: {pack_url}\n\n" if pack_url else ""
+    link_line_b = f"Link do podglądu online: {pack_url}\n\n" if pack_url else ""
 
     if v == 0:
-        subject = f"{count_ind} {city_in} — {gaps_text}"
+        subject = f"{ind_subj_cap} {city_in} - próbka w załączniku"
         email_body = (
-            f"Cześć,\n\n"
-            f"wpadłem na stronę {agency_name} i widzę, że ogarniacie {natural_services}. "
-            f"Akurat sprawdzałem dzisiaj kilka {ind_gen} {city_in} i trafiłem na {count_ind_acc}{hot_note}, "
-            f"u których na stronie widać proste do naprawienia luki, m.in. {gaps_email}.\n\n"
-            f"Wrzuciłem do załącznika darmową próbkę w CSV z samymi wynikami audytu (bez nazw firm), "
-            f"żebyście mogli w pół minuty rzucić okiem, czy to w ogóle Wasz profil klienta.\n\n"
-            f"Jeśli wyglądają sensownie, mogę oddać całą listę z domenami, NIP-ami ({with_nip} szt.) "
-            f"i bezpośrednimi mailami ({with_email} szt.) na wyłączność tylko dla {agency_name} za {price_str} (bez VAT) "
-            f"— po zakupie zdejmuję ją ze sprzedaży dla innych agencji.\n\n"
-            f"{link_sentence}"
-            f"Daj znać, czy zbieracie teraz takich klientów.\n\n"
+            f"Dzień dobry,\n\n"
+            f"sprawdziłem dziś kilka {ind_gen} {city_in} pod kątem technicznym i analityki. "
+            f"Odłożyłem {count_ind_acc}, u których na stronie widać podstawowe rzeczy do poprawy, głównie {gaps_two}.\n\n"
+            f"W załączniku wysyłam krótką próbkę w CSV z samymi wynikami audytu, na razie bez nazw firm. "
+            f"Jeśli szukacie teraz nowych klientów z tej branży, mogę oddać pełną listę z domenami, mailami i NIP-ami "
+            f"na wyłączność dla {agency_name} za {price_str} bez VAT. Po sprzedaży nie wysyłam jej nikomu więcej.\n\n"
+            f"{link_line_a}"
+            f"Dajcie znać, czy taki temat jest dla Was ciekawy.\n\n"
             f"Pozdrawiam,\n{clean_sender}"
         )
     elif v == 1:
-        subject = f"krótko o {pl_plural(total_leads, 'firmie', 'firmach', 'firmach')} {city_in} (próbka w załączniku)"
+        subject = f"Lista {count_ind_gen} {city_in}"
         email_body = (
             f"Dzień dobry,\n\n"
-            f"piszę krótko, bo widzę, że w {agency_name} zajmujecie się takimi tematami jak {natural_services}. "
-            f"Przejrzałem dziś strony {ind_gen} {city_in} i odłożyłem {count_ind_acc}, "
-            f"gdzie od razu widać konkretny punkt zaczepienia do rozmowy ({gaps_email}).\n\n"
-            f"W załączniku jest bezpłatny podgląd w CSV z zamaskowanymi domenami — widać błędy, czasy ładowania i CMS, "
-            f"więc łatwo ocenić jakość bez żadnego zobowiązania.\n\n"
-            f"Pełną listę z odkrytymi danymi, walidowanymi NIP-ami i krótką notatką pod każdą firmę "
-            f"sprzedaję tylko jednej agencji na wyłączność za {price_str} (cena końcowa bez VAT).\n\n"
-            f"{link_sentence}"
-            f"Jeśli temat jest dla Was ciekawy, odpisz proszę — mogę przytrzymać tę paczkę dla Was do jutra.\n\n"
+            f"przejrzałem dziś strony {ind_gen} {city_in} i zebrałem {count_ind_acc}, "
+            f"które mają konkretne rzeczy do poprawy, m.in. {gaps_three}. "
+            f"Ponieważ w {agency_name} zajmujecie się {focus}, pomyślałem, że mogą to być dobre tematy do rozmowy.\n\n"
+            f"Załączyłem plik CSV z samymi wynikami bez nazw firm, żeby można było ocenić jakość przed decyzją. "
+            f"Pełna lista z odkrytymi danymi kosztuje {price_str} bez VAT i sprzedaję ją tylko jednej agencji.\n\n"
+            f"{link_line_b}"
+            f"Czy jesteście zainteresowani taką listą?\n\n"
             f"Pozdrawiam,\n{clean_sender}"
         )
     else:
-        subject = f"{count_ind} {city_in} z brakami na stronie — anonimowa próbka"
+        subject = f"Pytanie ws. firm {city_from}"
         email_body = (
-            f"Cześć,\n\n"
-            f"zerknąłem na ofertę {agency_name} ({natural_services}) i pomyślałem, że może Wam się przydać "
-            f"świeża lista, którą dziś sprawdziłem {city_in}. Jest na niej {count_ind} ({ind_gen}) "
-            f"z konkretnymi brakami technicznymi i marketingowymi: {gaps_email}.\n\n"
-            f"Zamiast opisywać to w mailu, załączyłem darmowy plik CSV z samymi błędami (nazwy spółek są ukryte). "
-            f"Przy większości mamy wyciągnięte maile ({with_email}/{total_leads}) i NIP ({with_nip}/{total_leads}).\n\n"
-            f"Całość oddaję wyłącznie jednej agencji za {price_str} (bez VAT), żeby te same firmy nie lądowały u konkurencji.\n\n"
-            f"{link_sentence}"
-            f"Daj znać, czy w ogóle korzystacie z takich list, czy wszystko robicie u siebie.\n\n"
+            f"Dzień dobry,\n\n"
+            f"przygotowałem dzisiaj krótką listę {count_ind_gen} {city_in}, "
+            f"u których na stronie wyszły konkretne rzeczy do poprawy, w tym {gaps_two}. "
+            f"Do większości mam już zebrane maile kontaktowe oraz numery NIP.\n\n"
+            f"W załączniku przesyłam anonimową próbkę CSV, żebyście mogli sprawdzić jak to wygląda. "
+            f"Jeśli pasuje to do Waszej oferty, pełną wersję na wyłączność dla {agency_name} "
+            f"mogę przekazać za {price_str} bez VAT.\n\n"
+            f"{link_line_a}"
+            f"Jeśli temat jest nieaktualny, przepraszam za zajęcie czasu.\n\n"
             f"Pozdrawiam,\n{clean_sender}"
         )
 
     if pack_url:
         linkedin_dm = (
-            f"Cześć! Widzę, że w {agency_name} zajmujecie się tematami typu {natural_services}. "
-            f"Sprawdziłem dziś parę {ind_gen} {city_in} i wyłapałem {count_ind_acc}, gdzie widać {gaps_text}. "
-            f"Anonimową próbkę audytu wrzuciłem tutaj, jeśli chcesz rzucić okiem: {pack_url}"
+            f"Dzień dobry, sprawdziłem dziś kilka {ind_gen} {city_in} i zebrałem {count_ind_acc} "
+            f"z konkretnymi rzeczami do poprawy na stronie. Jeśli szukacie teraz klientów z tej branży, "
+            f"anonimowy podgląd jest tutaj: {pack_url}"
         )
     else:
         linkedin_dm = (
-            f"Cześć! Widzę, że w {agency_name} ogarniacie {natural_services}. "
-            f"Sprawdziłem dziś kilka {ind_gen} {city_in} i trafiłem na {count_ind_acc}, u których widać {gaps_text}. "
-            f"Wrzucić Ci tutaj anonimową próbkę w CSV (bez nazw firm), żebyś ocenił czy to Wasz typ klienta?"
+            f"Dzień dobry, sprawdziłem dziś kilka {ind_gen} {city_in} i zebrałem {count_ind_acc}, "
+            f"u których widać m.in. {gaps_two}. Mogę podesłać anonimową próbkę CSV, "
+            f"żebyście zobaczyli czy to temat dla Was?"
         )
 
     return subject, email_body, linkedin_dm
