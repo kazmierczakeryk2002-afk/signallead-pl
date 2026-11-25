@@ -9,9 +9,10 @@
 | Moduł | Rola |
 |---|---|
 | `engine.py` | **Silnik wieloagentowy:** `HarvesterAgent` (OpenStreetMap Overpass API + polska pula domen B2B), `SignalAuditorAgent` (audyt live strony głównej + `/kontakt`, `/o-nas`, ekstrakcja kontaktów i matematyczna walidacja NIP, scoring 0–99 pkt, klasyfikacja kupca, wycena leada i kontraktu, generator polskiego Icebreakera), `LeadDatabase` (SQLite, maskowanie Teaser, eksport CSV UTF-8-SIG). |
-| `app.py` | **Backend FastAPI:** REST API (`/api/leads`, `/api/audit`, `/api/harvest`, `/api/export/csv`, `/api/export/json`, `/health`) + serwowanie panelu webowego. |
-| `dashboard.html` | **Panel Webowy (Tailwind Dark UI):** KPI paczki (w tym cena pakietowa `-25%` i pipeline kontraktów), przełącznik **PEŁNE DANE vs DEMO / TEASER**, skaner pojedynczej domeny, harvester miast, podgląd mini-audytu i kopiowanie Icebreakera 1 kliknięciem. |
-| `cli.py` | **Narzędzie wsadowe CLI:** uruchamianie audytów, harvestera i eksportu CSV z terminala lub crona. |
+| `buyer_finder.py` | **Moduł Buyer Finder (Etap 2):** `AgencyHarvesterAgent` (wyszukiwanie polskich agencji SEO/SEM, Performance 360, Digital i Software House'ów + skan live usług, e-maili, telefonów, NIP i LinkedIn), `OutreachOfferGenerator` (generator spersonalizowanych ofert Teaser-First — Cold Mail + LinkedIn DM + załącznik Demo CSV), `BuyerDatabase` (CRM statusów outreach w SQLite + eksport CSV gotowy pod Woodpecker/Instantly). |
+| `app.py` | **Backend FastAPI:** REST API (`/api/leads`, `/api/audit`, `/api/harvest`, `/api/export/csv`, `/api/buyers/*`, `/health`) + serwowanie panelu webowego. |
+| `dashboard.html` | **Panel Webowy (Tailwind Dark UI):** 2 zakładki (**Leady Sygnałowe** + **Buyer Finder**), KPI paczki (`-25%` i pipeline kontraktów), przełącznik **PEŁNE DANE vs DEMO / TEASER**, skanery live, CRM agencji i modal **Generator Oferty Teaser-First**. |
+| `cli.py` | **Narzędzie wsadowe CLI:** uruchamianie audytów, harvestera leadów, Buyer Findera, generatora ofert i eksportu CSV z terminala. |
 | `Dockerfile` | Gotowy obraz produkcyjny (Python 3.12-slim) pod Railway, Render, Fly.io lub własny VPS. |
 
 ---
@@ -35,7 +36,10 @@ pip install -r requirements.txt
 # 1. Zasilić bazę testową z CLI (przykład: Warszawa / Kancelarie)
 python cli.py --harvest --city "Warszawa" --industry "Kancelarie Prawne/Podatkowe" --limit 5
 
-# 2. Uruchomić panel webowy FastAPI
+# 2. Znaleźć agencje (Buyer Finder) w tym samym mieście
+python cli.py --find-buyers --city "Warszawa" --limit 5
+
+# 3. Uruchomić panel webowy FastAPI
 uvicorn app:app --host 0.0.0.0 --port 8000
 ```
 
@@ -57,6 +61,12 @@ python cli.py --list --teaser --min-score 55 --export-csv demo_krakow.csv
 
 # Eksport pełnej paczki po opłaceniu przez klienta
 python cli.py --list --min-score 55 --export-csv pelna_paczka_krakow.csv
+
+# Buyer Finder — wyszukanie polskich agencji + eksport Outreach CSV z gotowymi mailami
+python cli.py --find-buyers --city Kraków --limit 5 --export-csv outreach_agencje_krakow.csv
+
+# Wygenerowanie pojedynczej oferty Teaser-First dla wybranej agencji
+python cli.py --generate-offer delante.pl
 ```
 
 ---
@@ -65,14 +75,20 @@ python cli.py --list --min-score 55 --export-csv pelna_paczka_krakow.csv
 
 | Metoda | Endpoint | Opis |
 |---|---|---|
-| `GET` | `/` | Panel Webowy Dashboard |
+| `GET` | `/` | Panel Webowy Dashboard (Leady Sygnałowe + Buyer Finder) |
 | `GET` | `/health` | Healthcheck dla Railway / Render / Fly.io |
-| `GET` | `/api/meta` | Lista obsługiwanych miast, branż i profili kupców |
+| `GET` | `/api/meta` | Lista obsługiwanych miast, branż, typów agencji i statusów CRM |
 | `GET` | `/api/leads?min_score=0&teaser=false` | Lista leadów + KPI (obsługuje `city`, `industry`, `buyer_persona`, `search`) |
 | `POST` | `/api/audit` | Audyt pojedynczej domeny na żywo (`{"url": "...", "city": "...", "industry": "..."}`) |
 | `POST` | `/api/harvest` | Batch harvest + audyt (`{"city": "Warszawa", "industry": "...", "limit": 5}`) |
 | `GET` | `/api/export/csv?teaser=true\|false` | Pobierz paczkę CSV (UTF-8-SIG, gotową pod polski Excel) |
 | `GET` | `/api/export/json?teaser=true\|false` | Pobierz paczkę JSON z KPI |
+| `GET` | `/api/buyers` | Lista agencji (Buyer Finder) + KPI outreach |
+| `POST` | `/api/buyers/harvest` | Wyszukaj i wzbogać polskie agencje (`{"city": "Kraków", "limit": 5}`) |
+| `POST` | `/api/buyers/add` | Dodaj i przeskanuj pojedynczą agencję na żywo |
+| `POST` | `/api/buyers/{domain}/offer` | Wygeneruj spersonalizowaną ofertę Teaser-First (Cold Mail + LinkedIn DM + Demo CSV URL) |
+| `PATCH` | `/api/buyers/{domain}/status` | Zaktualizuj status CRM (`new`, `teaser_sent`, `replied`, `paid`, `rejected`) |
+| `GET` | `/api/buyers/export/csv` | Eksport agencji wraz z gotowymi cold mailami i DM (UTF-8-SIG CSV) |
 
 ---
 

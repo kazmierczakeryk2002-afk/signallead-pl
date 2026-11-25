@@ -26,6 +26,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
 
+from buyer_finder import (
+    AGENCY_TYPES,
+    OUTREACH_STATUSES,
+    AgencyHarvesterAgent,
+    BuyerDatabase,
+    OutreachOfferGenerator,
+    run_buyer_harvest,
+)
 from engine import (
     CITIES,
     INDUSTRIES,
@@ -39,17 +47,12 @@ BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = Path(os.getenv("SIGNALLEAD_DB_PATH", str(BASE_DIR / "signallead.db")))
 DASHBOARD_FILE = BASE_DIR / "dashboard.html"
 
-BUYER_PERSONAS = [
-    "Software House / Agencja Web Dev",
-    "Agencja Performance & SEO 360",
-    "Agencja SEO / SEM",
-    "Agencja Digital Marketing",
-]
+BUYER_PERSONAS = AGENCY_TYPES
 
 app = FastAPI(
     title="SignalLead PL",
-    description="Autonomiczny silnik leadów sygnałowych B2B w Polsce (Teaser-First)",
-    version="1.0.0",
+    description="Autonomiczny silnik leadów sygnałowych B2B w Polsce (Teaser-First + Buyer Finder)",
+    version="1.1.0",
 )
 
 app.add_middleware(
@@ -61,7 +64,10 @@ app.add_middleware(
 )
 
 db = LeadDatabase(DB_PATH)
+buyer_db = BuyerDatabase(DB_PATH)
 auditor = SignalAuditorAgent()
+agency_harvester = AgencyHarvesterAgent()
+offer_generator = OutreachOfferGenerator()
 
 
 # ---------------------------------------------------------------------------
@@ -82,6 +88,31 @@ class HarvestRequest(BaseModel):
     industry: str = Field(default="Kancelarie Prawne/Podatkowe")
     limit: int = Field(default=5, ge=1, le=20)
     teaser: bool = Field(default=False)
+
+
+class BuyerHarvestRequest(BaseModel):
+    city: str = Field(default="Warszawa")
+    agency_type: Optional[str] = Field(default="Wszystkie")
+    limit: int = Field(default=5, ge=1, le=15)
+
+
+class BuyerAddRequest(BaseModel):
+    url: str = Field(..., min_length=3, examples=["https://delante.pl"])
+    city: str = Field(default="Kraków")
+    agency_type: Optional[str] = Field(default=None)
+    agency_name: Optional[str] = Field(default=None)
+
+
+class BuyerOfferRequest(BaseModel):
+    pack_city: Optional[str] = Field(default=None)
+    min_score: int = Field(default=0, ge=0, le=99)
+    match_persona_only: bool = Field(default=False)
+    sender_name: str = Field(default="Zespół SignalLead PL")
+
+
+class BuyerStatusRequest(BaseModel):
+    status: str = Field(..., examples=["teaser_sent"])
+    notes: Optional[str] = Field(default=None)
 
 
 # ---------------------------------------------------------------------------
@@ -106,11 +137,13 @@ async def healthcheck() -> dict[str, str]:
 
 
 @app.get("/api/meta")
-async def get_meta() -> dict[str, list[str]]:
+async def get_meta() -> dict:
     return {
         "cities": list(CITIES.keys()),
         "industries": INDUSTRIES,
         "buyer_personas": BUYER_PERSONAS,
+        "agency_types": AGENCY_TYPES,
+        "outreach_statuses": OUTREACH_STATUSES,
     }
 
 
@@ -251,6 +284,136 @@ async def delete_lead(domain: str) -> dict:
     deleted = db.delete_lead(domain)
     if not deleted:
         raise HTTPException(status_code=404, detail="Nie znaleziono domeny w bazie.")
+    return {"status": "deleted", "domain": domain}
+
+
+# ---------------------------------------------------------------------------
+# Stage 2 / Module 1: Buyer Finder & Outreach Generator Routes
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/buyers")
+async def get_buyers(
+    city: Optional[str] = Query(default=None),
+    agency_type: Optional[str] = Query(default=None),
+    status: Optional[str] = Query(default=None),
+    search: Optional[str] = Query(default=None),
+) -> dict:
+    buyers = buyer_db.list_buyers(
+        city=city,
+        agency_type=agency_type,
+        status=status,
+        search=search,
+    )
+    kpis = buyer_db.compute_kpis(buyers)
+    return {
+        "kpis": kpis,
+        "buyers": buyers,
+    }
+
+
+@app.post("/api/buyers/harvest")
+async def harvest_agency_buyers(payload: BuyerHarvestRequest) -> dict:
+    if payload.city not in CITIES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Nieobsługiwane miasto. Dostępne: {', '.join(CITIES.keys())}",
+        )
+    if payload.agency_type and payload.agency_type != "Wszystkie" and payload.agency_type not in AGENCY_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Nieobsługiwany typ agencji. Dostępne: {', '.join(AGENCY_TYPES)}",
+        )
+    enriched = await run_buyer_harvest(
+        city=payload.city,
+        agency_type=payload.agency_type,
+        limit=payload.limit,
+        buyer_db=buyer_db,
+    )
+    return {
+        "status": "ok",
+        "city": payload.city,
+        "agency_type": payload.agency_type or "Wszystkie",
+        "discovered_count": len(enriched),
+        "buyers": enriched,
+    }
+
+
+@app.post("/api/buyers/add")
+async def add_single_buyer(payload: BuyerAddRequest) -> dict:
+    try:
+        record = await agency_harvester.enrich_agency(
+            raw_url=payload.url,
+            city=payload.city,
+            hint_type=payload.agency_type,
+            hint_name=payload.agency_name,
+            source="manual",
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502, detail=f"Błąd podczas analizy strony agencji: {exc}"
+        ) from exc
+
+    saved = buyer_db.upsert_buyer(record)
+    return {"status": "ok", "buyer": saved}
+
+
+@app.get("/api/buyers/export/csv")
+async def export_buyers_outreach_csv(
+    city: Optional[str] = Query(default=None),
+    agency_type: Optional[str] = Query(default=None),
+    status: Optional[str] = Query(default=None),
+    min_score: int = Query(default=0, ge=0, le=99),
+) -> Response:
+    buyers = buyer_db.list_buyers(
+        city=city, agency_type=agency_type, status=status
+    )
+    csv_body = buyer_db.export_outreach_csv(buyers, lead_db=db, min_score=min_score)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d")
+    filename = f"SignalLead_PL_Buyer_Outreach_{stamp}.csv"
+    return Response(
+        content=csv_body.encode("utf-8"),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.post("/api/buyers/{domain}/offer")
+async def generate_buyer_offer(domain: str, payload: BuyerOfferRequest) -> dict:
+    buyer = buyer_db.get_buyer(domain)
+    if not buyer:
+        raise HTTPException(status_code=404, detail="Nie znaleziono agencji w bazie.")
+    offer = offer_generator.generate(
+        buyer=buyer,
+        lead_db=db,
+        pack_city=payload.pack_city,
+        min_score=payload.min_score,
+        match_persona_only=payload.match_persona_only,
+        sender_name=payload.sender_name,
+    )
+    return {"status": "ok", "offer": offer}
+
+
+@app.patch("/api/buyers/{domain}/status")
+async def update_buyer_status(domain: str, payload: BuyerStatusRequest) -> dict:
+    try:
+        updated = buyer_db.update_status(
+            domain=domain, status=payload.status, notes=payload.notes
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not updated:
+        raise HTTPException(status_code=404, detail="Nie znaleziono agencji w bazie.")
+    return {"status": "ok", "buyer": updated}
+
+
+@app.delete("/api/buyers/{domain}")
+async def delete_buyer(domain: str) -> dict:
+    deleted = buyer_db.delete_buyer(domain)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Nie znaleziono agencji w bazie.")
     return {"status": "deleted", "domain": domain}
 
 
