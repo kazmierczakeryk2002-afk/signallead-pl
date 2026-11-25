@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: signallead-pl
+    runtime: docker
+    plan: starter
+    region: frankfurt
+    healthCheckPath: /health
+    disk:
+      name: signallead-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: SIGNALLEAD_DB_PATH
+        value: /data/signallead.db
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: ADMIN_USER
+        value: admin
+      - key: ADMIN_PASSWORD
+        generateValue: true
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+      - key: MAIL_REPLY_TO
+        sync: false
+      - key: DAILY_SEND_LIMIT
+        value: "20"
+      - key: OUTREACH_COOLDOWN_DAYS
+        value: "7"

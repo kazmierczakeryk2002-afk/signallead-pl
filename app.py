@@ -57,8 +57,13 @@ from pack_store import (
     StripeBillingService,
 )
 
+import base64
+import re
+import secrets
+
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = Path(os.getenv("SIGNALLEAD_DB_PATH", str(BASE_DIR / "signallead.db")))
+DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 DASHBOARD_FILE = BASE_DIR / "dashboard.html"
 PACK_PAGE_FILE = BASE_DIR / "pack_page.html"
 
@@ -67,7 +72,7 @@ BUYER_PERSONAS = AGENCY_TYPES
 app = FastAPI(
     title="SignalLead PL",
     description="Autonomiczny silnik leadów sygnałowych B2B w Polsce (Teaser-First + Buyer Finder + Stripe Pack Store + Outreach Mailer)",
-    version="1.3.0",
+    version="1.4.0",
 )
 
 app.add_middleware(
@@ -77,6 +82,52 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Public agency sales pages, checkout/download endpoints, healthcheck, and Stripe webhook
+PUBLIC_PATH_PATTERNS = (
+    re.compile(r"^/health$"),
+    re.compile(r"^/pack/[^/]+(?:/success)?$"),
+    re.compile(r"^/api/packs/[^/]+/(?:public|demo\.csv|checkout|simulate-checkout|verify|download/csv|download/json)$"),
+    re.compile(r"^/api/webhooks/stripe$"),
+)
+
+
+def _is_public_path(path: str) -> bool:
+    return any(p.match(path) for p in PUBLIC_PATH_PATTERNS)
+
+
+@app.middleware("http")
+async def admin_auth_middleware(request: Request, call_next):
+    """
+    When ADMIN_PASSWORD is set in production, protect the admin dashboard (/)
+    and all internal /api/* endpoints via HTTP Basic Auth while keeping public
+    agency /pack/{id} pages, checkout/download endpoints, and Stripe webhooks open.
+    """
+    admin_password = os.getenv("ADMIN_PASSWORD", "").strip()
+    if not admin_password or _is_public_path(request.url.path):
+        return await call_next(request)
+
+    admin_user = os.getenv("ADMIN_USER", "admin").strip() or "admin"
+    auth_header = request.headers.get("authorization", "")
+    authorized = False
+    if auth_header.lower().startswith("basic "):
+        try:
+            decoded = base64.b64decode(auth_header.split(" ", 1)[1].strip()).decode("utf-8")
+            user, _, pwd = decoded.partition(":")
+            authorized = secrets.compare_digest(user, admin_user) and secrets.compare_digest(
+                pwd, admin_password
+            )
+        except Exception:
+            authorized = False
+
+    if not authorized:
+        return Response(
+            content="Wymagane logowanie administratora SignalLead PL.",
+            status_code=401,
+            headers={"WWW-Authenticate": 'Basic realm="SignalLead PL Admin"'},
+        )
+    return await call_next(request)
+
 
 db = LeadDatabase(DB_PATH)
 buyer_db = BuyerDatabase(DB_PATH)

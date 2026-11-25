@@ -140,15 +140,20 @@ export OUTREACH_COOLDOWN_DAYS="7"
 
 ---
 
-## Wdrożenie 1 kliknięciem (Docker / Railway / Render / Fly.io)
+## Wdrożenie 1 kliknięciem (Railway / Render / Docker)
 
-### Docker
+Pełna checklista krok po kroku (chmura + wolumen `/data` + `ADMIN_PASSWORD` + Stripe BLIK/P24 + Resend DNS) znajduje się w **[DEPLOY.md](DEPLOY.md)**, a gotowy szablon zmiennych w **[.env.example](.env.example)**.
+
+### Railway (`railway.json`) / Render (`render.yaml`)
+1. Podłącz to repozytorium GitHub (`Dockerfile` oraz `railway.json` / `render.yaml` są wykrywane automatycznie).
+2. Podepnij wolumen trwały pod `/data` i ustaw `SIGNALLEAD_DB_PATH=/data/signallead.db`.
+3. **Obowiązkowo ustaw `ADMIN_PASSWORD`** — zabezpieczy Twój panel `/` i pełną bazę leadów, zostawiając publiczne strony sprzedażowe `/pack/{id}` i webhook Stripe otwarte dla agencji.
+
+### Docker lokalnie / VPS
 ```bash
 docker build -t signallead-pl .
-docker run -d -p 8000:8000 -v $(pwd)/data:/app/data -e SIGNALLEAD_DB_PATH=/app/data/signallead.db signallead-pl
+docker run -d -p 8000:8000 -v $(pwd)/data:/data \
+  -e SIGNALLEAD_DB_PATH=/data/signallead.db \
+  -e ADMIN_PASSWORD="twoje-silne-haslo" \
+  signallead-pl
 ```
-
-### Railway / Render / Fly.io
-1. Podłącz to repozytorium GitHub.
-2. Wybierz build z `Dockerfile` (zmienna środowiskowa `PORT` jest obsługiwana automatycznie).
-3. Opcjonalnie podepnij wolumen trwały (Volume) i ustaw `SIGNALLEAD_DB_PATH=/data/signallead.db`.
