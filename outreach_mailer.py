@@ -416,7 +416,7 @@ class OutreachMailerService:
         pack_city: Optional[str] = None,
         min_score: int = 0,
         match_persona_only: bool = False,
-        sender_name: str = "Zespół SignalLead PL",
+        sender_name: str = "Eryk",
         custom_subject: Optional[str] = None,
         custom_body: Optional[str] = None,
         attach_demo_csv: bool = True,

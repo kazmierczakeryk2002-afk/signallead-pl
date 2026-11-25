@@ -51,7 +51,7 @@
         <div>
           <span class="text-sm font-semibold tracking-tight text-slate-100">SignalLead PL</span>
           <span class="ml-2 rounded bg-slate-800 px-2 py-0.5 font-mono text-[10px] text-slate-300 ring-1 ring-slate-700">
-            Teaser-First B2B Pack
+            Lista firm B2B
           </span>
         </div>
       </div>
@@ -59,7 +59,7 @@
       <div class="flex items-center gap-2 text-xs">
         <span id="billing-mode-badge" class="hidden rounded-md px-2.5 py-1 font-mono text-[11px]"></span>
         <span class="rounded-md bg-emerald-500/10 px-2.5 py-1 font-medium text-emerald-300 ring-1 ring-emerald-500/25">
-          Wyłączność 1:1 (1 agencja)
+          Tylko dla jednej agencji
         </span>
       </div>
     </div>
@@ -276,11 +276,11 @@
             <div class="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <span class="rounded bg-emerald-500/20 px-2.5 py-1 font-mono text-[11px] font-semibold text-emerald-300">
-                  ✓ PŁATNOŚĆ POTWIERDZONA · WYŁĄCZNOŚĆ ZABLOKOWANA
+                  ✓ Płatność zaksięgowana · lista należy wyłącznie do Was
                 </span>
                 <h1 class="mt-3 text-xl font-bold text-slate-50">${escapeHtml(p.title)}</h1>
                 <p class="mt-1 text-xs text-emerald-200/90">
-                  Ta paczka została trwale wycofana ze sprzedaży dla innych agencji. Pełne dane (${p.lead_count} firm) są gotowe do pobrania.
+                  Zdjęliśmy tę paczkę ze sprzedaży dla innych agencji. Poniżej masz pełne dane (${p.lead_count} firm) i pliki do pobrania.
                 </p>
               </div>
               <div class="flex flex-wrap gap-2.5">
@@ -310,7 +310,7 @@
             const lead = leads[Number(btn.dataset.copyIce)];
             if (lead) {
               await navigator.clipboard.writeText(lead.icebreaker || '');
-              showToast(`Skopiowano Icebreaker dla ${lead.company_name}`);
+              showToast(`Skopiowano wiadomość dla ${lead.company_name}`);
             }
           });
         });
@@ -330,7 +330,7 @@
       const badge = $('billing-mode-badge');
       badge.classList.remove('hidden');
       if (stripeLive) {
-        badge.textContent = 'Stripe Checkout · PLN';
+        badge.textContent = 'Stripe · PLN';
         badge.className = 'rounded-md bg-slate-800 px-2.5 py-1 font-mono text-[11px] text-slate-300 ring-1 ring-slate-700';
       } else {
         badge.textContent = 'Tryb Testowy (Sandbox)';
@@ -345,36 +345,36 @@
       if (isSold) {
         ctaBlock = `
           <div class="rounded-xl border border-rose-500/35 bg-rose-500/10 p-5 text-center">
-            <div class="text-sm font-semibold text-rose-200">Ta paczka została już wykupiona na wyłączność</div>
+            <div class="text-sm font-semibold text-rose-200">Ta lista została już wykupiona</div>
             <p class="mt-1 text-xs text-rose-200/75">
-              Każdą paczkę SignalLead PL sprzedajemy tylko 1 agencji, żeby nie wysyłać tych samych firm do konkurencji.
+              Każdą paczkę oddajemy tylko jednej agencji, żeby te same firmy nie dostawały identycznych ofert od konkurencji.
             </p>
           </div>`;
       } else if (isReserved) {
         ctaBlock = `
           <div class="rounded-xl border border-amber-500/35 bg-amber-500/10 p-5 text-center">
-            <div class="text-sm font-semibold text-amber-200">Paczka jest właśnie w trakcie rezerwacji</div>
+            <div class="text-sm font-semibold text-amber-200">Ktoś właśnie opłaca tę paczkę</div>
             <p class="mt-1 text-xs text-amber-200/80">
-              Inna agencja rozpoczęła płatność. Jeśli transakcja nie zostanie sfinalizowana w ciągu 20 minut, paczka wróci do sprzedaży.
+              Jeśli płatność nie zostanie dokończona w ciągu 20 minut, lista wróci tutaj jako dostępna.
             </p>
           </div>`;
       } else {
         ctaBlock = `
           <div class="space-y-3">
             <button id="btn-buy-pack" type="button" class="w-full rounded-xl bg-emerald-500 px-6 py-3.5 text-sm font-bold text-slate-950 shadow-lg transition hover:bg-emerald-400 active:scale-[0.99]">
-              Kup na wyłączność — ${formatPLN(p.final_price_pln)} (BLIK · Karta · P24)
+              Odblokuj na wyłączność — ${formatPLN(p.final_price_pln)} (BLIK · Karta · P24)
             </button>
             <div class="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
-              <span>Cena końcowa (bez VAT) · Zbieramy NIP do rachunku/faktury</span>
+              <span>Cena końcowa (bez VAT) · Możesz podać NIP do rachunku</span>
               <a href="/api/packs/${encodeURIComponent(p.pack_id)}/demo.csv" class="font-medium text-amber-300 hover:underline">
-                Pobierz darmowe Demo CSV ↓
+                Pobierz anonimową próbkę CSV ↓
               </a>
             </div>
           </div>`;
       }
 
       root.innerHTML = `
-        ${route.canceled ? '<div class="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-200">Płatność została anulowana — paczka jest ponownie dostępna, jeśli chcesz dokończyć zakup.</div>' : ''}
+        ${route.canceled ? '<div class="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-200">Płatność została przerwana — jeśli chcesz wrócić do zakupu, lista nadal jest wolna.</div>' : ''}
 
         <section class="surface-card rounded-2xl p-6 sm:p-8">
           <div class="grid grid-cols-1 gap-8 lg:grid-cols-12">
@@ -382,20 +382,20 @@
               <div class="flex flex-wrap items-center gap-2 text-[11px]">
                 <span class="rounded bg-slate-800 px-2.5 py-1 font-medium text-slate-200">${escapeHtml(p.city)}</span>
                 <span class="rounded bg-slate-800 px-2.5 py-1 font-medium text-slate-200">${escapeHtml(p.industry)}</span>
-                <span class="rounded bg-emerald-500/15 px-2.5 py-1 font-mono text-emerald-300 ring-1 ring-emerald-500/25">1 szt. · Na wyłączność</span>
+                <span class="rounded bg-emerald-500/15 px-2.5 py-1 font-mono text-emerald-300 ring-1 ring-emerald-500/25">1 szt. · na wyłączność</span>
               </div>
               <h1 class="text-2xl font-bold tracking-tight text-slate-50 sm:text-3xl">${escapeHtml(p.title)}</h1>
               <p class="text-sm leading-relaxed text-slate-300">
-                ${escapeHtml(p.description || 'Zweryfikowana na żywo paczka polskich firm B2B z konkretnymi, kosztownymi lukami technicznymi, SEO lub analitycznymi (GA4 / GTM / Meta Pixel). Po opłaceniu natychmiast pobierasz pełne CSV/JSON z odkrytymi domenami, NIP-ami, e-mailami i gotowymi Icebreakerami.')}
+                ${escapeHtml(p.description || 'Świeżo sprawdzona lista polskich firm z konkretnymi brakami na stronie (m.in. wolny serwer, brak GA4/GTM, brak pixela Mety lub podstaw SEO). Poniżej widzisz anonimową próbkę z samymi wynikami — po zakupie od razu pobierasz pełny plik CSV i JSON z domenami, NIP-ami, mailami oraz gotową krótką wiadomością otwierającą pod każdą firmę.')}
               </p>
 
               <div class="grid grid-cols-2 gap-3 pt-2 sm:grid-cols-4">
                 <div class="rounded-xl bg-slate-900/80 p-3.5 ring-1 ring-slate-800">
-                  <div class="text-[10px] uppercase tracking-wider text-slate-400">Liczba firm</div>
+                  <div class="text-[10px] uppercase tracking-wider text-slate-400">Firm na liście</div>
                   <div class="mt-1 font-mono text-lg font-bold text-slate-100">${p.lead_count}</div>
                 </div>
                 <div class="rounded-xl bg-slate-900/80 p-3.5 ring-1 ring-slate-800">
-                  <div class="text-[10px] uppercase tracking-wider text-slate-400">Gorące (75+)</div>
+                  <div class="text-[10px] uppercase tracking-wider text-slate-400">Najpilniejsze (75+)</div>
                   <div class="mt-1 font-mono text-lg font-bold text-rose-400">${p.hot_count}</div>
                 </div>
                 <div class="rounded-xl bg-slate-900/80 p-3.5 ring-1 ring-slate-800">
@@ -403,7 +403,7 @@
                   <div class="mt-1 font-mono text-lg font-bold text-emerald-300">${p.with_nip_count} / ${p.with_email_count}</div>
                 </div>
                 <div class="rounded-xl bg-slate-900/80 p-3.5 ring-1 ring-slate-800">
-                  <div class="text-[10px] uppercase tracking-wider text-sky-400">Pipeline agencji</div>
+                  <div class="text-[10px] uppercase tracking-wider text-sky-400">Szacowany potencjał</div>
                   <div class="mt-1 font-mono text-lg font-bold text-sky-300">${formatPLN(p.pipeline_pln)}</div>
                 </div>
               </div>
@@ -421,10 +421,10 @@
                 </div>
 
                 <ul class="mt-4 space-y-2 text-xs text-slate-300">
-                  <li>✓ Natychmiastowe pobranie pełnego pliku CSV (Excel) i JSON</li>
-                  <li>✓ Odkryte domeny, walidowane NIP-y, e-maile B2B i telefony</li>
-                  <li>✓ Gotowy spersonalizowany Icebreaker pod każdą firmę</li>
-                  <li>✓ Wyłączność 1:1 — po zakupie paczka znika ze sprzedaży</li>
+                  <li>✓ Od razu po opłaceniu pobierasz plik CSV (Excel) i JSON</li>
+                  <li>✓ Odkryte domeny, zweryfikowane NIP-y, maile i telefony</li>
+                  <li>✓ Krótka, ludzka wiadomość na start pod każdą firmę</li>
+                  <li>✓ Po zakupie lista znika ze sprzedaży dla innych agencji</li>
                 </ul>
               </div>
 

@@ -585,7 +585,7 @@
         <form id="outreach-batch-form" class="grid grid-cols-1 gap-3 rounded-xl bg-slate-950/60 p-4 ring-1 ring-slate-800/80 sm:grid-cols-12">
           <div class="sm:col-span-4">
             <label for="outreach-sender-name" class="mb-1 block text-[11px] text-slate-400">Podpis nadawcy</label>
-            <input id="outreach-sender-name" type="text" value="Zespół SignalLead PL" class="w-full rounded-lg border border-slate-700/80 bg-slate-950 px-3 py-1.5 text-xs text-slate-100 focus:border-emerald-500 focus:outline-none" />
+            <input id="outreach-sender-name" type="text" value="Eryk" class="w-full rounded-lg border border-slate-700/80 bg-slate-950 px-3 py-1.5 text-xs text-slate-100 focus:border-emerald-500 focus:outline-none" />
           </div>
           <div class="sm:col-span-3">
             <label for="outreach-batch-city" class="mb-1 block text-[11px] text-slate-400">Miasto agencji (Nowe)</label>
@@ -1555,7 +1555,7 @@
       const matchPersonaOnly = $('offer-match-persona').checked;
 
       try {
-        const senderName = $('outreach-sender-name')?.value?.trim() || 'Zespół SignalLead PL';
+        const senderName = $('outreach-sender-name')?.value?.trim() || 'Eryk';
         const res = await fetch(`/api/buyers/${encodeURIComponent(buyer.domain)}/offer`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -2118,7 +2118,7 @@
           body: JSON.stringify({
             city: $('outreach-batch-city').value,
             limit: Number($('outreach-batch-limit').value),
-            sender_name: $('outreach-sender-name').value.trim() || 'Zespół SignalLead PL',
+            sender_name: $('outreach-sender-name').value.trim() || 'Eryk',
             attach_demo_csv: true,
           }),
         });

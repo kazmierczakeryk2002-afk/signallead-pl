@@ -362,11 +362,11 @@ class PackDatabase:
         with self._connect() as conn:
             if city and city != "Wszystkie":
                 row = conn.execute(
-                    "SELECT * FROM packs WHERE status = 'available' AND city = ? ORDER BY created_at DESC LIMIT 1",
-                    (city,),
+                    "SELECT * FROM packs WHERE status = 'available' AND city IN (?, 'Wszystkie') "
+                    "ORDER BY CASE WHEN city = ? THEN 0 ELSE 1 END, created_at DESC LIMIT 1",
+                    (city, city),
                 ).fetchone()
-                if row:
-                    return self._row_to_dict(row)
+                return self._row_to_dict(row) if row else None
             row = conn.execute(
                 "SELECT * FROM packs WHERE status = 'available' ORDER BY created_at DESC LIMIT 1"
             ).fetchone()

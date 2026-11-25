@@ -128,7 +128,7 @@ class BuyerOfferRequest(BaseModel):
     pack_city: Optional[str] = Field(default=None)
     min_score: int = Field(default=0, ge=0, le=99)
     match_persona_only: bool = Field(default=False)
-    sender_name: str = Field(default="Zespół SignalLead PL")
+    sender_name: str = Field(default="Eryk")
 
 
 class BuyerStatusRequest(BaseModel):
@@ -162,7 +162,7 @@ class OutreachSendRequest(BaseModel):
     pack_city: Optional[str] = Field(default=None)
     min_score: int = Field(default=0, ge=0, le=99)
     match_persona_only: bool = Field(default=False)
-    sender_name: str = Field(default="Zespół SignalLead PL")
+    sender_name: str = Field(default="Eryk")
     custom_subject: Optional[str] = Field(default=None)
     custom_body: Optional[str] = Field(default=None)
     attach_demo_csv: bool = Field(default=True)
@@ -174,7 +174,7 @@ class OutreachBatchRequest(BaseModel):
     agency_type: Optional[str] = Field(default="Wszystkie")
     limit: int = Field(default=5, ge=1, le=20)
     min_score: int = Field(default=0, ge=0, le=99)
-    sender_name: str = Field(default="Zespół SignalLead PL")
+    sender_name: str = Field(default="Eryk")
     attach_demo_csv: bool = Field(default=True)
 
 

@@ -1463,59 +1463,14 @@ class SignalAuditorAgent:
         signals: list[SignalItem],
         ttfb_ms: int,
     ) -> str:
-        if not signals:
-            return (
-                f"Dzień dobry, przejrzałem stronę {domain} ({company_name}) pod kątem "
-                f"konwersji i widoczności B2B w {city}. Fundament techniczny wygląda solidnie, "
-                f"ale widzę 2 szybkie szanse na zwiększenie liczby zapytań ofertowych — "
-                f"czy mogę podesłać 3-minutowe wideo z rekomendacjami?"
-            )
+        from human_copy import build_human_icebreaker
 
-        # Pick top 2-3 highest severity signals
-        severity_rank = {"critical": 0, "high": 1, "medium": 2}
-        top_signals = sorted(
-            signals, key=lambda s: (severity_rank.get(s.severity, 3), -s.points)
-        )[:3]
-
-        bullet_phrases: list[str] = []
-        for s in top_signals:
-            if s.code == "no_ssl":
-                bullet_phrases.append("brak aktywnego certyfikatu SSL/HTTPS (przeglądarki oznaczają stronę jako niebezpieczną)")
-            elif s.code == "slow_ttfb":
-                bullet_phrases.append(f"wolną odpowiedź serwera ({ttfb_ms} ms TTFB, co obniża pozycje w Google)")
-            elif s.code == "no_viewport":
-                bullet_phrases.append("brak pełnego dostosowania do urządzeń mobilnych (brak meta viewport)")
-            elif s.code == "legacy_cms":
-                bullet_phrases.append("przestarzałą technologię CMS ograniczającą rozwój i SEO")
-            elif s.code == "missing_meta_description":
-                bullet_phrases.append("brak meta opisów decydujących o klikalności w Google")
-            elif s.code in ("missing_h1", "multiple_h1"):
-                bullet_phrases.append("błędy w strukturze nagłówków H1 osłabiające widoczność SEO")
-            elif s.code == "missing_schema":
-                bullet_phrases.append("brak danych strukturalnych Schema.org dla Google")
-            elif s.code == "missing_ga4":
-                bullet_phrases.append("brak wdrożonego Google Analytics 4")
-            elif s.code == "missing_gtm":
-                bullet_phrases.append("brak Google Tag Managera")
-            elif s.code == "missing_meta_pixel":
-                bullet_phrases.append("brak Meta Pixela (utrata ciepłego ruchu bez remarketingu)")
-            elif s.code == "missing_tiktok_pixel":
-                bullet_phrases.append("brak analityki pod kampanie wideo/social")
-            else:
-                bullet_phrases.append(s.label.lower())
-
-        issues_text = (
-            ", ".join(bullet_phrases[:-1]) + f" oraz {bullet_phrases[-1]}"
-            if len(bullet_phrases) > 1
-            else bullet_phrases[0]
-        )
-
-        return (
-            f"Dzień dobry, robiąc przegląd firm z sektora B2B w lokalizacji {city}, "
-            f"trafiłem na stronę {company_name} ({domain}). Zauważyłem od razu konkretną "
-            f"lukę, przez którą mogą Państwo tracić zapytania klientów: {issues_text}. "
-            f"Przygotowałem krótki, 1-stronicowy mini-audyt z konkretną listą szybkich poprawek "
-            f"(dla zespołu typu {buyer_persona}) — czy mogę go przesłać w odpowiedzi?"
+        return build_human_icebreaker(
+            company_name=company_name,
+            domain=domain,
+            city=city,
+            signals=signals,
+            ttfb_ms=ttfb_ms,
         )
 
 
