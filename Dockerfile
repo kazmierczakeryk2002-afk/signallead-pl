@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY engine.py buyer_finder.py pack_store.py app.py cli.py dashboard.html pack_page.html ./
+COPY engine.py buyer_finder.py pack_store.py outreach_mailer.py app.py cli.py dashboard.html pack_page.html ./
 
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
 USER appuser

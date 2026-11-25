@@ -42,6 +42,13 @@ from engine import (
     mask_lead_for_teaser,
     run_harvest_and_audit,
 )
+from outreach_mailer import (
+    CooldownActiveError,
+    DailyLimitReachedError,
+    OutreachDatabase,
+    OutreachError,
+    OutreachMailerService,
+)
 from pack_store import (
     PACK_STATUS_LABELS,
     PackDatabase,
@@ -59,8 +66,8 @@ BUYER_PERSONAS = AGENCY_TYPES
 
 app = FastAPI(
     title="SignalLead PL",
-    description="Autonomiczny silnik leadów sygnałowych B2B w Polsce (Teaser-First + Buyer Finder + Stripe Pack Store)",
-    version="1.2.0",
+    description="Autonomiczny silnik leadów sygnałowych B2B w Polsce (Teaser-First + Buyer Finder + Stripe Pack Store + Outreach Mailer)",
+    version="1.3.0",
 )
 
 app.add_middleware(
@@ -74,10 +81,14 @@ app.add_middleware(
 db = LeadDatabase(DB_PATH)
 buyer_db = BuyerDatabase(DB_PATH)
 pack_db = PackDatabase(DB_PATH)
+outreach_db = OutreachDatabase(DB_PATH)
 auditor = SignalAuditorAgent()
 agency_harvester = AgencyHarvesterAgent()
 offer_generator = OutreachOfferGenerator()
 stripe_billing = StripeBillingService(pack_db=pack_db, buyer_db=buyer_db)
+outreach_mailer = OutreachMailerService(
+    lead_db=db, buyer_db=buyer_db, pack_db=pack_db, outreach_db=outreach_db
+)
 
 
 # ---------------------------------------------------------------------------
@@ -147,6 +158,26 @@ class SimulateCheckoutRequest(BaseModel):
     payment_method: str = Field(default="blik")
 
 
+class OutreachSendRequest(BaseModel):
+    pack_city: Optional[str] = Field(default=None)
+    min_score: int = Field(default=0, ge=0, le=99)
+    match_persona_only: bool = Field(default=False)
+    sender_name: str = Field(default="Zespół SignalLead PL")
+    custom_subject: Optional[str] = Field(default=None)
+    custom_body: Optional[str] = Field(default=None)
+    attach_demo_csv: bool = Field(default=True)
+    force: bool = Field(default=False)
+
+
+class OutreachBatchRequest(BaseModel):
+    city: Optional[str] = Field(default="Wszystkie")
+    agency_type: Optional[str] = Field(default="Wszystkie")
+    limit: int = Field(default=5, ge=1, le=20)
+    min_score: int = Field(default=0, ge=0, le=99)
+    sender_name: str = Field(default="Zespół SignalLead PL")
+    attach_demo_csv: bool = Field(default=True)
+
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -178,6 +209,7 @@ async def get_meta() -> dict:
         "outreach_statuses": OUTREACH_STATUSES,
         "pack_statuses": PACK_STATUS_LABELS,
         "stripe_live": stripe_billing.is_live_configured,
+        "mailer_provider": outreach_mailer.active_provider,
     }
 
 
@@ -682,6 +714,64 @@ async def stripe_webhook(request: Request) -> dict:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Błąd webhooka Stripe: {exc}") from exc
+    return {"status": "ok", **result}
+
+
+# ---------------------------------------------------------------------------
+# Stage 2 / Module 3: Automated Outreach Mailer (Specialist #8)
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/outreach/status")
+async def get_outreach_status(limit: int = Query(default=30, ge=1, le=200)) -> dict:
+    return outreach_mailer.get_status(log_limit=limit)
+
+
+@app.post("/api/outreach/send/{domain}")
+async def send_outreach_single(
+    domain: str, payload: OutreachSendRequest, request: Request
+) -> dict:
+    base_url = str(request.base_url).rstrip("/")
+    try:
+        res = await outreach_mailer.send_to_buyer(
+            buyer_domain=domain,
+            base_url=base_url,
+            pack_city=payload.pack_city,
+            min_score=payload.min_score,
+            match_persona_only=payload.match_persona_only,
+            sender_name=payload.sender_name,
+            custom_subject=payload.custom_subject,
+            custom_body=payload.custom_body,
+            attach_demo_csv=payload.attach_demo_csv,
+            force=payload.force,
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except CooldownActiveError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except DailyLimitReachedError as exc:
+        raise HTTPException(status_code=429, detail=str(exc)) from exc
+    except OutreachError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"status": "ok", **res}
+
+
+@app.post("/api/outreach/batch")
+async def send_outreach_batch(
+    payload: OutreachBatchRequest, request: Request
+) -> dict:
+    base_url = str(request.base_url).rstrip("/")
+    result = await outreach_mailer.send_batch(
+        base_url=base_url,
+        city=payload.city,
+        agency_type=payload.agency_type,
+        limit=payload.limit,
+        min_score=payload.min_score,
+        sender_name=payload.sender_name,
+        attach_demo_csv=payload.attach_demo_csv,
+    )
     return {"status": "ok", **result}
 
 
