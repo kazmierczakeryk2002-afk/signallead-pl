@@ -935,10 +935,9 @@ class SignalAuditorAgent:
                 lead_price_pln=59,
                 estimated_agency_contract_pln=9000,
                 icebreaker=(
-                    f"Dzień dobry, próbowałem wejść na stronę {domain} i niestety "
-                    f"przeglądarka zwraca błąd połączenia/SSL ({ssl_error or 'timeout'}). "
-                    f"Klienci trafiający z Google widzą dziś błąd zamiast Państwa oferty — "
-                    f"mogę podesłać krótką diagnozę techniczną?"
+                    f"Dzień dobry, próbowałem dziś wejść na {domain}, ale przeglądarka "
+                    f"zwraca błąd połączenia lub certyfikatu SSL. Jeśli strona miała działać, "
+                    f"mogę krótko opisać co dokładnie widać po stronie serwera."
                 ),
                 audit_status=f"error: {ssl_error or 'unreachable'}",
                 audited_subpages=[],
@@ -1053,7 +1052,7 @@ class SignalAuditorAgent:
                 SignalItem(
                     category="Web Dev",
                     code="slow_ttfb",
-                    label=f"Wolny czas odpowiedzi serwera (TTFB {ttfb_ms} ms > 1400 ms)",
+                    label=f"Wolny czas odpowiedzi serwera (TTFB {ttfb_ms} ms)",
                     severity=severity,
                     points=pts,
                 )
@@ -1063,7 +1062,7 @@ class SignalAuditorAgent:
                 SignalItem(
                     category="Web Dev",
                     code="no_viewport",
-                    label="Brak responsywności mobilnej (<meta name='viewport'>)",
+                    label="Brak responsywności mobilnej (meta viewport)",
                     severity="critical",
                     points=18,
                 )
@@ -1073,7 +1072,7 @@ class SignalAuditorAgent:
                 SignalItem(
                     category="Web Dev",
                     code="legacy_cms",
-                    label=f"Ograniczony lub przestarzały silnik strony ({cms})",
+                    label=f"Starszy lub ograniczony CMS ({cms})",
                     severity="high",
                     points=12,
                 )
@@ -1085,7 +1084,7 @@ class SignalAuditorAgent:
                 SignalItem(
                     category="SEO",
                     code="missing_meta_description",
-                    label="Brak lub pusty tag <meta name='description'>",
+                    label="Brak tagu meta description",
                     severity="high",
                     points=11,
                 )
@@ -1095,7 +1094,7 @@ class SignalAuditorAgent:
                 SignalItem(
                     category="SEO",
                     code="missing_h1",
-                    label="Brak nagłówka <h1> na stronie głównej",
+                    label="Brak nagłówka H1 na stronie głównej",
                     severity="high",
                     points=11,
                 )
@@ -1105,7 +1104,7 @@ class SignalAuditorAgent:
                 SignalItem(
                     category="SEO",
                     code="multiple_h1",
-                    label=f"Wielokrotne nagłówki <h1> ({h1_count} szt. — rozmyta struktura SEO)",
+                    label=f"Wielokrotne nagłówki H1 ({h1_count} szt.)",
                     severity="medium",
                     points=8,
                 )
@@ -1123,7 +1122,7 @@ class SignalAuditorAgent:
 
         # Ads / Marketing Signals
         # Note: When GTM is present in static HTML, GA4 and Meta Pixel are frequently
-        # injected dynamically via GTM JS container — suppress false-positive claims!
+        # injected dynamically via GTM JS container - suppress false-positive claims!
         if not has_gtm:
             signals.append(
                 SignalItem(
@@ -1139,7 +1138,7 @@ class SignalAuditorAgent:
                     SignalItem(
                         category="Ads / Marketing",
                         code="missing_ga4",
-                        label="Brak analityki Google Analytics 4 (GA4)",
+                        label="Brak Google Analytics 4 (GA4)",
                         severity="high",
                         points=12,
                     )
@@ -1149,7 +1148,7 @@ class SignalAuditorAgent:
                     SignalItem(
                         category="Ads / Marketing",
                         code="missing_meta_pixel",
-                        label="Brak Meta Pixel (utracony remarketing Facebook/Instagram Ads)",
+                        label="Brak Meta Pixela",
                         severity="high",
                         points=10,
                     )
@@ -1159,7 +1158,7 @@ class SignalAuditorAgent:
                 SignalItem(
                     category="Ads / Marketing",
                     code="missing_tiktok_pixel",
-                    label="Brak TikTok Pixel (niewykorzystany kanał zasięgowy)",
+                    label="Brak TikTok Pixela",
                     severity="medium",
                     points=5,
                 )

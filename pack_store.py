@@ -206,7 +206,7 @@ class PackDatabase:
         if not title or not title.strip():
             city_lbl = city if city != "Wszystkie" else "Polska"
             ind_lbl = industry if industry != "Wszystkie" else "B2B"
-            title = f"{city_lbl} — {ind_lbl} ({kpis['total_leads']} firm)"
+            title = f"{city_lbl} - {ind_lbl} ({kpis['total_leads']} firm)"
 
         slug_prefix = _slugify(f"{city if city != 'Wszystkie' else 'pl'}-{industry if industry != 'Wszystkie' else 'b2b'}")
         pack_id = f"{slug_prefix}-{secrets.token_hex(2)}"
