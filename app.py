@@ -310,6 +310,67 @@ async def audit_single_domain(payload: AuditRequest) -> dict:
     return {"status": "ok", "lead": result}
 
 
+class BulkAuditRequest(BaseModel):
+    urls_text: str = Field(..., min_length=3)
+    city: str = Field(default="Warszawa")
+    industry: str = Field(default="Kancelarie Prawne/Podatkowe")
+    teaser: bool = Field(default=False)
+
+
+@app.post("/api/audit/batch")
+async def audit_bulk_domains(payload: BulkAuditRequest) -> dict:
+    """Audit up to 25 custom domains pasted from Google Maps / CSV concurrently."""
+    import asyncio
+
+    raw_items = [
+        item.strip()
+        for item in re.split(r"[\n,;]+", payload.urls_text)
+        if item.strip()
+    ]
+    # Deduplicate while preserving order, cap at 25 per batch
+    unique_urls: list[str] = []
+    seen: set[str] = set()
+    for u in raw_items:
+        key = u.lower()
+        if key not in seen:
+            seen.add(key)
+            unique_urls.append(u)
+        if len(unique_urls) >= 25:
+            break
+
+    if not unique_urls:
+        raise HTTPException(status_code=400, detail="Wklej co najmniej jedną domenę.")
+
+    sem = asyncio.Semaphore(4)
+    audited: list[dict] = []
+    errors: list[dict[str, str]] = []
+
+    async def worker(raw_url: str) -> None:
+        async with sem:
+            try:
+                rec = await auditor.audit(
+                    raw_url=raw_url,
+                    city=payload.city,
+                    industry=payload.industry,
+                )
+                saved = db.upsert_lead(rec)
+                audited.append(
+                    mask_lead_for_teaser(saved) if payload.teaser else saved
+                )
+            except Exception as exc:
+                errors.append({"url": raw_url, "error": str(exc)})
+
+    await asyncio.gather(*(worker(u) for u in unique_urls))
+    audited.sort(key=lambda x: x["lead_score"], reverse=True)
+    return {
+        "status": "ok",
+        "audited_count": len(audited),
+        "error_count": len(errors),
+        "leads": audited,
+        "errors": errors,
+    }
+
+
 @app.post("/api/harvest")
 async def harvest_city_industry(payload: HarvestRequest) -> dict:
     if payload.city not in CITIES:
@@ -580,12 +641,22 @@ async def list_packs(status: Optional[str] = Query(default=None)) -> dict:
 
 @app.post("/api/packs")
 async def create_pack(payload: PackCreateRequest) -> dict:
-    leads = db.list_leads(
+    raw_leads = db.list_leads(
         min_score=payload.min_score,
         city=None if payload.city == "Wszystkie" else payload.city,
         industry=None if payload.industry == "Wszystkie" else payload.industry,
         teaser=False,
     )
+    # Exclude unreachable / timeout domains (HTTP=0) from commercial packs
+    leads = [
+        l for l in raw_leads
+        if l.get("http_status", 0) > 0 and l.get("audit_status") == "ok"
+    ]
+    if not leads:
+        raise HTTPException(
+            status_code=400,
+            detail="Brak aktywnych firm (HTTP 200) dla wybranych filtrów — martwe domeny z timeoutem są pomijane automatycznie.",
+        )
     try:
         pack = pack_db.create_pack(
             leads=leads,
@@ -600,7 +671,7 @@ async def create_pack(payload: PackCreateRequest) -> dict:
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {"status": "ok", "pack": pack}
+    return {"status": "ok", "pack": pack, "skipped_unreachable": len(raw_leads) - len(leads)}
 
 
 @app.patch("/api/packs/{pack_id}/price")
