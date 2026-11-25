@@ -17,6 +17,13 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from buyer_finder import (
+    AGENCY_TYPES,
+    OUTREACH_STATUSES,
+    BuyerDatabase,
+    OutreachOfferGenerator,
+    run_buyer_harvest,
+)
 from engine import (
     CITIES,
     INDUSTRIES,
@@ -70,10 +77,40 @@ def print_lead_summary(leads: list[dict[str, Any]], teaser: bool = False) -> Non
     print()
 
 
+def print_buyer_summary(buyers: list[dict[str, Any]]) -> None:
+    if not buyers:
+        print("Brak agencji w bazie Buyer Finder.")
+        return
+
+    kpis = BuyerDatabase.compute_kpis(buyers)
+    print("\n" + "=" * 92)
+    print(" SignalLead PL — Buyer Finder (Agencje / Kupcy Paczek)")
+    print(
+        f" Agencje: {kpis['total_buyers']}  |  Z e-mailem: {kpis['with_email_count']}  |  "
+        f"Wysłano Demo: {kpis['teaser_sent_count']}  |  Odpowiedzi: {kpis['replied_count']}  |  "
+        f"Opłacone: {kpis['paid_count']}"
+    )
+    print("=" * 92)
+
+    for idx, b in enumerate(buyers, 1):
+        emails = ", ".join(b.get("emails", [])[:2]) or "brak"
+        phones = ", ".join(b.get("phones", [])[:1]) or "brak"
+        services = ", ".join(b.get("services", [])[:4]) or "nie wykryto"
+        status_pl = OUTREACH_STATUSES.get(b.get("outreach_status", "new"), "Nowa")
+        print(
+            f"\n[{idx}] {b['agency_name']} ({b['domain']}) — {b['city']} | {b['agency_type']}"
+        )
+        print(
+            f"    Status: {status_pl} | NIP={b.get('nip') or 'brak'} | Email={emails} | Tel={phones}"
+        )
+        print(f"    Usługi: {services}")
+    print()
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="signallead",
-        description="SignalLead PL — CLI do audytu polskich stron B2B i generowania paczek leadów sygnałowych.",
+        description="SignalLead PL — CLI do audytu polskich stron B2B, paczek Teaser-First i Buyer Findera.",
     )
     parser.add_argument("--url", type=str, help="Pojedyncza domena lub URL do audytu na żywo.")
     parser.add_argument(
@@ -85,6 +122,28 @@ def build_parser() -> argparse.ArgumentParser:
         "--list",
         action="store_true",
         help="Wyświetl aktualne leady zapisane w bazie SQLite.",
+    )
+    parser.add_argument(
+        "--find-buyers",
+        action="store_true",
+        help="Wyszukaj i wzbogać polskie agencje (Buyer Finder) dla wybranego miasta.",
+    )
+    parser.add_argument(
+        "--list-buyers",
+        action="store_true",
+        help="Wyświetl zapisane agencje z bazy Buyer Finder.",
+    )
+    parser.add_argument(
+        "--agency-type",
+        type=str,
+        default="Wszystkie",
+        help=f"Specjalizacja agencji ({', '.join(AGENCY_TYPES)} lub Wszystkie).",
+    )
+    parser.add_argument(
+        "--generate-offer",
+        type=str,
+        default=None,
+        help="Wygeneruj spersonalizowaną ofertę Teaser-First dla domeny agencji (np. delante.pl).",
     )
     parser.add_argument(
         "--city",
@@ -102,13 +161,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--limit",
         type=int,
         default=5,
-        help="Liczba firm do pobrania w trybie --harvest (domyślnie: 5).",
+        help="Liczba firm lub agencji do pobrania (domyślnie: 5).",
     )
     parser.add_argument(
         "--min-score",
         type=int,
         default=0,
-        help="Minimalny lead_score przy listowaniu/eksporcie (0-99).",
+        help="Minimalny lead_score przy listowaniu/eksporcie/ofercie (0-99).",
     )
     parser.add_argument(
         "--teaser",
@@ -137,6 +196,72 @@ def build_parser() -> argparse.ArgumentParser:
 
 async def async_main(args: argparse.Namespace) -> int:
     db = LeadDatabase(args.db)
+    buyer_db = BuyerDatabase(args.db)
+
+    # --- Buyer Finder CLI modes ---
+    if args.find_buyers:
+        if args.city not in CITIES:
+            print(
+                f"Błąd: nieznane miasto '{args.city}'. Dostępne: {', '.join(CITIES.keys())}",
+                file=sys.stderr,
+            )
+            return 2
+        buyers = await run_buyer_harvest(
+            city=args.city,
+            agency_type=args.agency_type,
+            limit=max(1, args.limit),
+            buyer_db=buyer_db,
+        )
+        if args.export_csv:
+            csv_text = buyer_db.export_outreach_csv(
+                buyers, lead_db=db, min_score=args.min_score
+            )
+            out_path = Path(args.export_csv)
+            out_path.write_text(csv_text, encoding="utf-8")
+            print(f"Zapisano eksport Buyer Outreach CSV ({len(buyers)} agencji) -> {out_path.resolve()}")
+        if args.json:
+            print(json.dumps({"kpis": buyer_db.compute_kpis(buyers), "buyers": buyers}, ensure_ascii=False, indent=2))
+        else:
+            print_buyer_summary(buyers)
+        return 0
+
+    if args.list_buyers:
+        buyers = buyer_db.list_buyers(
+            agency_type=None if args.agency_type == "Wszystkie" else args.agency_type
+        )
+        if args.export_csv:
+            csv_text = buyer_db.export_outreach_csv(
+                buyers, lead_db=db, min_score=args.min_score
+            )
+            out_path = Path(args.export_csv)
+            out_path.write_text(csv_text, encoding="utf-8")
+            print(f"Zapisano eksport Buyer Outreach CSV ({len(buyers)} agencji) -> {out_path.resolve()}")
+        if args.json:
+            print(json.dumps({"kpis": buyer_db.compute_kpis(buyers), "buyers": buyers}, ensure_ascii=False, indent=2))
+        else:
+            print_buyer_summary(buyers)
+        return 0
+
+    if args.generate_offer:
+        buyer = buyer_db.get_buyer(args.generate_offer.strip().lower())
+        if not buyer:
+            print(f"Błąd: nie znaleziono agencji '{args.generate_offer}' w bazie. Użyj najpierw --find-buyers.", file=sys.stderr)
+            return 2
+        offer = OutreachOfferGenerator().generate(
+            buyer=buyer, lead_db=db, min_score=args.min_score
+        )
+        if args.json:
+            print(json.dumps(offer, ensure_ascii=False, indent=2))
+        else:
+            print("\n" + "=" * 92)
+            print(f" OFERTA TEASER-FIRST DLA: {offer['agency_name']} ({offer['recipient_email'] or 'brak e-maila'})")
+            print("=" * 92)
+            print(f"TEMAT:\n{offer['subject']}\n")
+            print(f"COLD MAIL:\n{offer['email_body']}\n")
+            print(f"LINKEDIN DM:\n{offer['linkedin_dm']}\n")
+        return 0
+
+    # --- Lead Engine CLI modes ---
     results: list[dict[str, Any]] = []
 
     if args.url:
