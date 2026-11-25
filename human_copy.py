@@ -41,7 +41,7 @@ SERVICE_HUMAN: dict[str, str] = {
     "Meta Ads / Social Ads": "kampanie w social mediach",
     "Analityka GA4 / GTM": "analitykę",
     "Web Dev / WordPress": "strony WWW",
-    "Software House / Custom IT": "projekty webowe i IT",
+    "Software House / Custom IT": "projekty webowe",
     "E-commerce": "e-commerce",
 }
 

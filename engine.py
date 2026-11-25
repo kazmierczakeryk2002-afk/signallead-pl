@@ -1122,6 +1122,8 @@ class SignalAuditorAgent:
             )
 
         # Ads / Marketing Signals
+        # Note: When GTM is present in static HTML, GA4 and Meta Pixel are frequently
+        # injected dynamically via GTM JS container — suppress false-positive claims!
         if not has_gtm:
             signals.append(
                 SignalItem(
@@ -1132,27 +1134,27 @@ class SignalAuditorAgent:
                     points=9,
                 )
             )
-        if not has_ga4:
-            signals.append(
-                SignalItem(
-                    category="Ads / Marketing",
-                    code="missing_ga4",
-                    label="Brak analityki Google Analytics 4 (GA4)",
-                    severity="high",
-                    points=12,
+            if not has_ga4:
+                signals.append(
+                    SignalItem(
+                        category="Ads / Marketing",
+                        code="missing_ga4",
+                        label="Brak analityki Google Analytics 4 (GA4)",
+                        severity="high",
+                        points=12,
+                    )
                 )
-            )
-        if not has_meta_pixel:
-            signals.append(
-                SignalItem(
-                    category="Ads / Marketing",
-                    code="missing_meta_pixel",
-                    label="Brak Meta Pixel (utracony remarketing Facebook/Instagram Ads)",
-                    severity="high",
-                    points=10,
+            if not has_meta_pixel:
+                signals.append(
+                    SignalItem(
+                        category="Ads / Marketing",
+                        code="missing_meta_pixel",
+                        label="Brak Meta Pixel (utracony remarketing Facebook/Instagram Ads)",
+                        severity="high",
+                        points=10,
+                    )
                 )
-            )
-        if not has_tiktok_pixel:
+        if not has_tiktok_pixel and not has_gtm:
             signals.append(
                 SignalItem(
                     category="Ads / Marketing",

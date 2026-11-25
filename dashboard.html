@@ -223,26 +223,26 @@
 
     <!-- Action Panels: Single Live Scanner + City Harvester -->
     <section class="grid grid-cols-1 gap-4 lg:grid-cols-12">
-      <!-- Live Single Domain Scanner -->
+      <!-- Live Single or Bulk Domain Scanner -->
       <div class="surface-card rounded-xl p-5 lg:col-span-5">
         <div class="mb-3.5 flex items-center justify-between">
           <div>
-            <h2 class="text-sm font-semibold text-slate-100">Skaner pojedynczej domeny (Live)</h2>
-            <p class="text-xs text-slate-400">Sprawdza stronę główną, /kontakt i /o-nas pod kątem błędów i NIP</p>
+            <h2 class="text-sm font-semibold text-slate-100">Skaner domen / Import z Google Maps (Live)</h2>
+            <p class="text-xs text-slate-400">Wklej 1 domenę lub listę do 25 firm (po jednej w linii) — audyt + NIP na żywo</p>
           </div>
-          <span class="rounded bg-slate-800 px-2 py-0.5 font-mono text-[11px] text-slate-300">Agent 2 &amp; 3</span>
+          <span class="rounded bg-slate-800 px-2 py-0.5 font-mono text-[11px] text-slate-300">1–25 domen</span>
         </div>
 
         <form id="audit-form" class="space-y-3">
           <div>
-            <label for="audit-url" class="sr-only">Domena lub URL</label>
-            <input
+            <label for="audit-url" class="sr-only">Domena lub lista domen</label>
+            <textarea
               id="audit-url"
-              type="text"
+              rows="2"
               required
-              placeholder="np. kancelaria-przyklad.pl lub https://firma.pl"
-              class="w-full rounded-lg border border-slate-700/80 bg-slate-950/70 px-3.5 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-            />
+              placeholder="np. firma1.pl&#10;firma2.pl, firma3.pl (do 25 domen naraz)"
+              class="w-full rounded-lg border border-slate-700/80 bg-slate-950/70 px-3.5 py-2 font-mono text-xs text-slate-100 placeholder-slate-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            ></textarea>
           </div>
           <div class="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
             <select id="audit-city" class="rounded-lg border border-slate-700/80 bg-slate-950/70 px-3 py-2 text-xs text-slate-200 focus:border-emerald-500 focus:outline-none"></select>
@@ -1085,6 +1085,7 @@
                 >
                   Mini-audyt (${(lead.signals || []).length}) →
                 </button>
+                ${!state.teaser ? `<button type="button" data-del-lead="${escapeHtml(lead.domain)}" class="btn-del-lead text-[10px] text-rose-400/75 hover:text-rose-300">Usuń z bazy</button>` : ''}
               </div>
             </td>
           </tr>
@@ -1115,6 +1116,18 @@
         btn.addEventListener('click', () => {
           const lead = state.leads[Number(btn.dataset.detailIdx)];
           if (lead) openModal(lead);
+        });
+      });
+
+      document.querySelectorAll('.btn-del-lead').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const dom = btn.dataset.delLead;
+          if (!dom) return;
+          const res = await fetch(`/api/leads/${encodeURIComponent(dom)}`, { method: 'DELETE' });
+          if (res.ok) {
+            showToast(`Usunięto ${dom} z bazy.`);
+            await fetchLeads();
+          }
         });
       });
     }
@@ -1284,30 +1297,52 @@
     // Live single-domain audit submit
     $('audit-form').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const url = $('audit-url').value.trim();
-      if (!url) return;
+      const raw = $('audit-url').value.trim();
+      if (!raw) return;
+      const items = raw.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean);
+      const isBulk = items.length > 1;
       const btn = $('btn-run-audit');
       const status = $('audit-status-msg');
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner inline-block h-3.5 w-3.5 rounded-full border-2 border-slate-900 border-t-transparent"></span><span>Audytuję...</span>';
-      status.textContent = `Skanuję ${url} + podstrony /kontakt, /o-nas...`;
+      status.textContent = isBulk
+        ? `Skanuję wsadowo ${Math.min(items.length, 25)} domen (+ /kontakt, /o-nas)...`
+        : `Skanuję ${items[0]} + podstrony /kontakt, /o-nas...`;
 
       try {
-        const res = await fetch('/api/audit', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            url,
-            city: $('audit-city').value,
-            industry: $('audit-industry').value,
-            teaser: state.teaser,
-          }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Błąd audytu');
-        status.textContent = `Gotowe: ${data.lead.company_name} (${data.lead.lead_score} pkt · ${data.lead.lead_price_pln} PLN)`;
-        $('audit-url').value = '';
-        showToast(`Dodano lead: ${data.lead.company_name} (${data.lead.lead_score} pkt)`);
+        if (isBulk) {
+          const res = await fetch('/api/audit/batch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              urls_text: raw,
+              city: $('audit-city').value,
+              industry: $('audit-industry').value,
+              teaser: state.teaser,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.detail || 'Błąd importu domen');
+          status.textContent = `Gotowe: przeaudytowano ${data.audited_count} domen${data.error_count ? ` (błędy: ${data.error_count})` : ''}.`;
+          $('audit-url').value = '';
+          showToast(`Import zakończony: dodano ${data.audited_count} firm!`);
+        } else {
+          const res = await fetch('/api/audit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              url: items[0],
+              city: $('audit-city').value,
+              industry: $('audit-industry').value,
+              teaser: state.teaser,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.detail || 'Błąd audytu');
+          status.textContent = `Gotowe: ${data.lead.company_name} (${data.lead.lead_score} pkt · ${data.lead.lead_price_pln} PLN)`;
+          $('audit-url').value = '';
+          showToast(`Dodano lead: ${data.lead.company_name} (${data.lead.lead_score} pkt)`);
+        }
         await fetchLeads();
       } catch (err) {
         status.textContent = `Błąd: ${err.message}`;
